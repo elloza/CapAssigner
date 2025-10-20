@@ -1,0 +1,37 @@
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM"]
+ignore = ["E501"]  # Line too long (handled by black)
+
+[tool.black]
+line-length = 100
+target-version = ["py39"]
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "unit: Unit tests (fast, isolated)",
+    "integration: Integration tests (slower, dependencies)",
+    "contract: Contract tests (interface stability)",
+]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+strict_equality = true
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["streamlit.*", "matplotlib.*", "schemdraw.*", "networkx.*"]
+ignore_missing_imports = true
