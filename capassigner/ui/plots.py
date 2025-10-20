@@ -8,13 +8,13 @@ Implementation details will be added in subsequent features.
 """
 
 import matplotlib.pyplot as plt
-from typing import Any
+from typing import Any, Dict, List, Tuple
 
 
 def draw_sp(
     node: Any,
-    caps: list[float],
-    names: list[str],
+    caps: List[float],
+    names: List[str],
     scale: float = 0.6,
     font: int = 8
 ) -> plt.Figure:
@@ -40,7 +40,7 @@ def draw_sp(
 
 
 def draw_graph(
-    graph: dict[str, Any],
+    graph: Dict[str, Any],
     scale: float = 0.6,
     font: int = 8
 ) -> plt.Figure:
@@ -65,7 +65,7 @@ def draw_graph(
 
 
 def plot_error_distribution(
-    solutions: list[tuple[Any, float]],
+    solutions: List[Tuple[Any, float]],
     target: float
 ) -> plt.Figure:
     """Plot histogram of error distribution for solutions.

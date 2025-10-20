@@ -8,13 +8,13 @@ Implementation details will be added in subsequent features.
 """
 
 from __future__ import annotations
-from typing import Any, Callable
+from typing import Any, Callable, List, Tuple, Union
 
 
 def error_abs(
     value: float,
     target: float,
-    progress_cb: Callable[[int, int], None] | None = None
+    progress_cb: Union[Callable[[int, int], None], None] = None
 ) -> float:
     """Calculate absolute error between value and target.
 
@@ -34,7 +34,7 @@ def error_rel(
     value: float,
     target: float,
     eps: float = 1e-300,
-    progress_cb: Callable[[int, int], None] | None = None
+    progress_cb: Union[Callable[[int, int], None], None] = None
 ) -> float:
     """Calculate relative error as a percentage.
 
@@ -55,7 +55,7 @@ def is_within_tolerance(
     value: float,
     target: float,
     tolerance: float,
-    progress_cb: Callable[[int, int], None] | None = None
+    progress_cb: Union[Callable[[int, int], None], None] = None
 ) -> bool:
     """Check if value is within tolerance of target.
 
@@ -73,10 +73,10 @@ def is_within_tolerance(
 
 
 def rank_solutions(
-    solutions: list[tuple[Any, float]],
+    solutions: List[Tuple[Any, float]],
     target: float,
-    progress_cb: Callable[[int, int], None] | None = None
-) -> list[tuple[Any, float, float, float]]:
+    progress_cb: Union[Callable[[int, int], None], None] = None
+) -> List[Tuple[Any, float, float, float]]:
     """Rank solutions by error metrics.
 
     Args:

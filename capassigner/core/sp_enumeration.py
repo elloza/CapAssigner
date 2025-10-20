@@ -9,14 +9,14 @@ Implementation details will be added in subsequent features.
 """
 
 from __future__ import annotations
-from typing import Any, Callable
+from typing import Any, Callable, Dict, List, Tuple, Union
 
 
 def enumerate_simple_two_level(
-    caps: list[float],
-    names: list[str],
-    progress_cb: Callable[[int, int], None] | None = None
-) -> list[dict[str, Any]]:
+    caps: List[float],
+    names: List[str],
+    progress_cb: Union[Callable[[int, int], None], None] = None
+) -> List[Dict[str, Any]]:
     """Enumerate simple two-level series-parallel combinations.
 
     Partitions the capacitor set into two groups A and B, combines each
@@ -35,9 +35,9 @@ def enumerate_simple_two_level(
 
 
 def enumerate_sp_all(
-    caps: list[float],
-    progress_cb: Callable[[int, int], None] | None = None
-) -> list[tuple[Any, float]]:
+    caps: List[float],
+    progress_cb: Union[Callable[[int, int], None], None] = None
+) -> List[Tuple[Any, float]]:
     """Enumerate all series-parallel topologies exhaustively.
 
     Uses dynamic programming with memoization to generate all possible

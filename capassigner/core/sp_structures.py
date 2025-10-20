@@ -8,7 +8,7 @@ Implementation details will be added in subsequent features.
 """
 
 from __future__ import annotations
-from typing import Any, Callable
+from typing import Any, Callable, List, Union
 from dataclasses import dataclass
 
 
@@ -47,13 +47,13 @@ class Parallel:
 
 
 # Type alias for Series-Parallel node
-SPNode = Leaf | Series | Parallel
+SPNode = Union[Leaf, Series, Parallel]
 
 
 def sp_value(
     node: SPNode,
-    caps: list[float],
-    progress_cb: Callable[[int, int], None] | None = None
+    caps: List[float],
+    progress_cb: Union[Callable[[int, int], None], None] = None
 ) -> float:
     """Calculate equivalent capacitance of SP network.
 
@@ -71,8 +71,8 @@ def sp_value(
 
 def sp_str(
     node: SPNode,
-    names: list[str],
-    progress_cb: Callable[[int, int], None] | None = None
+    names: List[str],
+    progress_cb: Union[Callable[[int, int], None], None] = None
 ) -> str:
     """Convert SP network to string representation.
 

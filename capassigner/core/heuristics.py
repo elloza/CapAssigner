@@ -9,16 +9,16 @@ Implementation details will be added in subsequent features (future roadmap).
 """
 
 from __future__ import annotations
-from typing import Any, Callable
+from typing import Any, Callable, Dict, List, Union
 
 
 def genetic_algorithm(
-    caps: list[float],
+    caps: List[float],
     target: float,
     population_size: int,
     generations: int,
-    progress_cb: Callable[[int, int], None] | None = None
-) -> dict[str, Any]:
+    progress_cb: Union[Callable[[int, int], None], None] = None
+) -> Dict[str, Any]:
     """Genetic algorithm for network topology optimization.
 
     Args:
@@ -39,12 +39,12 @@ def genetic_algorithm(
 
 
 def simulated_annealing(
-    caps: list[float],
+    caps: List[float],
     target: float,
     max_iterations: int,
     initial_temp: float,
-    progress_cb: Callable[[int, int], None] | None = None
-) -> dict[str, Any]:
+    progress_cb: Union[Callable[[int, int], None], None] = None
+) -> Dict[str, Any]:
     """Simulated annealing for network topology optimization.
 
     Args:
@@ -65,12 +65,12 @@ def simulated_annealing(
 
 
 def particle_swarm_optimization(
-    caps: list[float],
+    caps: List[float],
     target: float,
     n_particles: int,
     iterations: int,
-    progress_cb: Callable[[int, int], None] | None = None
-) -> dict[str, Any]:
+    progress_cb: Union[Callable[[int, int], None], None] = None
+) -> Dict[str, Any]:
     """Particle swarm optimization for network topology.
 
     Args:

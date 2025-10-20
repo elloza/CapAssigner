@@ -9,15 +9,15 @@ Implementation details will be added in subsequent features.
 """
 
 from __future__ import annotations
-from typing import Any, Callable
+from typing import Any, Callable, Dict, List, Tuple, Union
 
 
 def ceq_by_laplacian(
-    edges: list[tuple[int, int, float]],
+    edges: List[Tuple[int, int, float]],
     n_nodes: int,
     a: int = 0,
     b: int = 1,
-    progress_cb: Callable[[int, int], None] | None = None
+    progress_cb: Union[Callable[[int, int], None], None] = None
 ) -> float:
     """Calculate equivalent capacitance using Laplacian matrix.
 
@@ -45,12 +45,12 @@ def ceq_by_laplacian(
 
 
 def heuristic_random_graph(
-    caps: list[float],
+    caps: List[float],
     iters: int,
     max_internal: int,
     seed: int,
-    progress_cb: Callable[[int, int], None] | None = None
-) -> tuple[dict[str, Any], float]:
+    progress_cb: Union[Callable[[int, int], None], None] = None
+) -> Tuple[Dict[str, Any], float]:
     """Heuristic search for non-SP topologies using random graphs.
 
     Generates random network topologies with internal nodes, evaluates

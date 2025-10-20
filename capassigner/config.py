@@ -12,7 +12,7 @@ Constitutional Alignment:
     - VI. Educational Transparency: Documentation flags
 """
 
-from typing import Final
+from typing import Final, Tuple
 
 # ============================================================================
 # Scientific Accuracy (Principle I)
@@ -65,7 +65,7 @@ MAX_CAPACITANCE: Final[float] = 1.0
 MAX_TARGET_CAPACITANCE: Final[float] = 1.0
 
 # Supported capacitance units
-CAPACITANCE_UNITS: Final[tuple[str, ...]] = (
+CAPACITANCE_UNITS: Final[Tuple[str, ...]] = (
     "F",   # Farad
     "mF",  # millifarad
     "uF",  # microfarad
@@ -114,7 +114,7 @@ SHOW_COMPLEXITY_WARNINGS: Final[bool] = True
 # ============================================================================
 
 # Modules that MUST NOT import streamlit
-STREAMLIT_FORBIDDEN_MODULES: Final[tuple[str, ...]] = (
+STREAMLIT_FORBIDDEN_MODULES: Final[Tuple[str, ...]] = (
     "capassigner.core.parsing",
     "capassigner.core.sp_structures",
     "capassigner.core.sp_enumeration",

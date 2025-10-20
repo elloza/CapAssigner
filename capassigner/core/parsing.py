@@ -9,12 +9,12 @@ Implementation details will be added in subsequent features.
 """
 
 from __future__ import annotations
-from typing import Any, Callable
+from typing import Any, Callable, Union
 
 
 def parse_capacitance(
     value: str,
-    progress_cb: Callable[[int, int], None] | None = None
+    progress_cb: Union[Callable[[int, int], None], None] = None
 ) -> float:
     """Parse capacitance value from string with units.
 
@@ -43,7 +43,7 @@ def parse_capacitance(
 
 def format_capacitance(
     value: float,
-    progress_cb: Callable[[int, int], None] | None = None
+    progress_cb: Union[Callable[[int, int], None], None] = None
 ) -> str:
     """Format capacitance value to human-readable string.
 
