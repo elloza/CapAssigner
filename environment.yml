@@ -1,0 +1,21 @@
+name: capassigner
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.9
+  - pip
+  - pip:
+      - streamlit>=1.28.0,<2.0.0
+      - numpy>=1.24.0,<2.0.0
+      - pandas>=2.0.0,<3.0.0
+      - matplotlib>=3.7.0,<4.0.0
+      - networkx>=3.1.0,<4.0.0
+      - schemdraw>=0.16.0,<1.0.0
+      - pytest>=7.4.0,<8.0.0
+      - pytest-cov>=4.1.0,<5.0.0
+      - mypy>=1.5.0,<2.0.0
+      - ruff>=0.1.0,<1.0.0
+      - black>=23.0.0,<24.0.0
+      - isort>=5.12.0,<6.0.0
+      - pre-commit>=3.4.0,<4.0.0
