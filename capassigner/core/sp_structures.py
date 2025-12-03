@@ -151,19 +151,42 @@ def sp_node_to_expression(node: SPNode, capacitor_labels: List[str]) -> str:
         raise TypeError(f"Unknown SPNode type: {type(node)}")
 
 
+def _collect_operands(node: SPNode, op_type: type, capacitor_labels: List[str]) -> List[str]:
+    """Collect all operands of the same operation type (flattening associativity).
+    
+    For example, for Series(Series(A, B), C), this returns [norm(A), norm(B), norm(C)]
+    instead of treating it as two nested series operations.
+    
+    Args:
+        node: Current node to process.
+        op_type: The operation type to flatten (Series or Parallel).
+        capacitor_labels: Labels for capacitors.
+    
+    Returns:
+        List of normalized expression strings for all operands.
+    """
+    if isinstance(node, op_type):
+        # Recursively collect from both branches
+        left_ops = _collect_operands(node.left, op_type, capacitor_labels)
+        right_ops = _collect_operands(node.right, op_type, capacitor_labels)
+        return left_ops + right_ops
+    else:
+        # Different operation type or leaf - normalize and return as single operand
+        return [sp_node_to_normalized_expression(node, capacitor_labels)]
+
+
 def sp_node_to_normalized_expression(node: SPNode, capacitor_labels: List[str]) -> str:
     """Generate normalized topology expression for deduplication.
 
-    Same as sp_node_to_expression but sorts operands alphabetically
-    to ensure equivalent topologies produce identical strings.
+    Normalizes expressions to handle both commutativity and associativity:
+    - Commutativity: (C1+C2) == (C2+C1)
+    - Associativity: (C1+(C2+C3)) == ((C1+C2)+C3)
     
-    Since series and parallel operations are commutative:
-    - (C1+C2) == (C2+C1)
-    - (C1||C2) == (C2||C1)
+    The normalization:
+    1. Flattens consecutive same-type operations
+    2. Sorts all operands alphabetically
+    3. Produces a canonical form
     
-    This function normalizes by always putting the lexicographically
-    smaller operand first.
-
     Args:
         node: Root of SP tree.
         capacitor_labels: Labels for capacitors (e.g., ["C1", "C2", "C3"]).
@@ -172,28 +195,30 @@ def sp_node_to_normalized_expression(node: SPNode, capacitor_labels: List[str]) 
         Normalized expression string.
 
     Examples:
+        >>> # Commutativity
         >>> series1 = Series(Leaf(0, 5e-12), Leaf(1, 10e-12))
         >>> series2 = Series(Leaf(1, 10e-12), Leaf(0, 5e-12))
         >>> sp_node_to_normalized_expression(series1, ["C1", "C2"])
         '(C1+C2)'
         >>> sp_node_to_normalized_expression(series2, ["C1", "C2"])
         '(C1+C2)'
+        >>> # Associativity: (C1+(C2+C3)) == ((C1+C2)+C3)
     """
     if isinstance(node, Leaf):
         return capacitor_labels[node.capacitor_index]
     elif isinstance(node, Series):
-        left_expr = sp_node_to_normalized_expression(node.left, capacitor_labels)
-        right_expr = sp_node_to_normalized_expression(node.right, capacitor_labels)
-        # Sort operands alphabetically for consistent ordering
-        if left_expr > right_expr:
-            left_expr, right_expr = right_expr, left_expr
-        return f"({left_expr}+{right_expr})"
+        # Collect all operands, flattening nested series
+        operands = _collect_operands(node, Series, capacitor_labels)
+        # Sort operands for canonical form
+        operands.sort()
+        # Join with + operator
+        return "(" + "+".join(operands) + ")"
     elif isinstance(node, Parallel):
-        left_expr = sp_node_to_normalized_expression(node.left, capacitor_labels)
-        right_expr = sp_node_to_normalized_expression(node.right, capacitor_labels)
-        # Sort operands alphabetically for consistent ordering
-        if left_expr > right_expr:
-            left_expr, right_expr = right_expr, left_expr
-        return f"({left_expr}||{right_expr})"
+        # Collect all operands, flattening nested parallels
+        operands = _collect_operands(node, Parallel, capacitor_labels)
+        # Sort operands for canonical form
+        operands.sort()
+        # Join with || operator
+        return "(" + "||".join(operands) + ")"
     else:
         raise TypeError(f"Unknown SPNode type: {type(node)}")
