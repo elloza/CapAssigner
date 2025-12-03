@@ -223,10 +223,18 @@ def find_best_sp_solutions(
 
     # Calculate C_eq and create solutions
     solutions = []
+    seen_expressions = set()  # Track unique expressions to avoid duplicates
+    
     for topology in topologies:
         try:
             ceq = calculate_sp_ceq(topology)
             expression = sp_node_to_expression(topology, capacitor_labels)
+            
+            # Skip duplicate expressions (same topology, different tree structure)
+            if expression in seen_expressions:
+                continue
+            seen_expressions.add(expression)
+            
             solution = create_solution(topology, ceq, target, tolerance, expression)
             solutions.append(solution)
         except (ZeroDivisionError, TypeError) as e:
