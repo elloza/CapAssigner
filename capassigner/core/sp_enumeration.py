@@ -14,7 +14,10 @@ from typing import Optional, List, FrozenSet
 from functools import lru_cache
 import math
 
-from capassigner.core.sp_structures import Leaf, Series, Parallel, SPNode, calculate_sp_ceq, sp_node_to_expression
+from capassigner.core.sp_structures import (
+    Leaf, Series, Parallel, SPNode, 
+    calculate_sp_ceq, sp_node_to_expression, sp_node_to_normalized_expression
+)
 from capassigner.core.metrics import Solution, ProgressUpdate, ProgressCallback, create_solution, rank_solutions
 from capassigner.config import PROGRESS_UPDATE_FREQUENCY
 
@@ -223,21 +226,22 @@ def find_best_sp_solutions(
 
     # Calculate C_eq and create solutions
     solutions = []
-    seen_ceq_values = set()  # Track unique C_eq values to avoid duplicates
+    seen_normalized = set()  # Track normalized expressions to detect true duplicates
     
     for topology in topologies:
         try:
             ceq = calculate_sp_ceq(topology)
             
-            # Round C_eq to 12 significant digits to detect numerical duplicates
-            # This handles floating-point precision while catching true duplicates
-            ceq_rounded = round(ceq, 15)  # 15 decimal places for femtofarad precision
+            # Use normalized expression to detect structurally equivalent topologies
+            # This handles commutativity: (C1+C2) == (C2+C1), (C1||C2) == (C2||C1)
+            normalized = sp_node_to_normalized_expression(topology, capacitor_labels)
             
-            # Skip duplicate C_eq values (different topologies, same result)
-            if ceq_rounded in seen_ceq_values:
+            # Skip duplicate topologies (same circuit, different tree structure)
+            if normalized in seen_normalized:
                 continue
-            seen_ceq_values.add(ceq_rounded)
+            seen_normalized.add(normalized)
             
+            # Use original (non-normalized) expression for display
             expression = sp_node_to_expression(topology, capacitor_labels)
             solution = create_solution(topology, ceq, target, tolerance, expression)
             solutions.append(solution)

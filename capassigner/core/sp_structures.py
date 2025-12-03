@@ -149,3 +149,51 @@ def sp_node_to_expression(node: SPNode, capacitor_labels: List[str]) -> str:
         return f"({left_expr}||{right_expr})"
     else:
         raise TypeError(f"Unknown SPNode type: {type(node)}")
+
+
+def sp_node_to_normalized_expression(node: SPNode, capacitor_labels: List[str]) -> str:
+    """Generate normalized topology expression for deduplication.
+
+    Same as sp_node_to_expression but sorts operands alphabetically
+    to ensure equivalent topologies produce identical strings.
+    
+    Since series and parallel operations are commutative:
+    - (C1+C2) == (C2+C1)
+    - (C1||C2) == (C2||C1)
+    
+    This function normalizes by always putting the lexicographically
+    smaller operand first.
+
+    Args:
+        node: Root of SP tree.
+        capacitor_labels: Labels for capacitors (e.g., ["C1", "C2", "C3"]).
+
+    Returns:
+        Normalized expression string.
+
+    Examples:
+        >>> series1 = Series(Leaf(0, 5e-12), Leaf(1, 10e-12))
+        >>> series2 = Series(Leaf(1, 10e-12), Leaf(0, 5e-12))
+        >>> sp_node_to_normalized_expression(series1, ["C1", "C2"])
+        '(C1+C2)'
+        >>> sp_node_to_normalized_expression(series2, ["C1", "C2"])
+        '(C1+C2)'
+    """
+    if isinstance(node, Leaf):
+        return capacitor_labels[node.capacitor_index]
+    elif isinstance(node, Series):
+        left_expr = sp_node_to_normalized_expression(node.left, capacitor_labels)
+        right_expr = sp_node_to_normalized_expression(node.right, capacitor_labels)
+        # Sort operands alphabetically for consistent ordering
+        if left_expr > right_expr:
+            left_expr, right_expr = right_expr, left_expr
+        return f"({left_expr}+{right_expr})"
+    elif isinstance(node, Parallel):
+        left_expr = sp_node_to_normalized_expression(node.left, capacitor_labels)
+        right_expr = sp_node_to_normalized_expression(node.right, capacitor_labels)
+        # Sort operands alphabetically for consistent ordering
+        if left_expr > right_expr:
+            left_expr, right_expr = right_expr, left_expr
+        return f"({left_expr}||{right_expr})"
+    else:
+        raise TypeError(f"Unknown SPNode type: {type(node)}")
