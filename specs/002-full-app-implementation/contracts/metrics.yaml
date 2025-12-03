@@ -1,0 +1,233 @@
+# API Contract: capassigner.core.metrics
+# Module: Error calculations and solution ranking
+# Requirements: FR-023 to FR-027
+
+module: capassigner.core.metrics
+description: Calculate error metrics and rank solutions for capacitance network synthesis
+version: 1.0.0
+
+functions:
+  - name: calculate_absolute_error
+    description: Calculate absolute error between equivalent and target capacitance
+    signature: |
+      def calculate_absolute_error(ceq: float, target: float) -> float
+    parameters:
+      - name: ceq
+        type: float
+        description: Equivalent capacitance in Farads
+        constraints:
+          - Must be >= 0
+      - name: target
+        type: float
+        description: Target capacitance in Farads
+        constraints:
+          - Must be > 0
+    returns:
+      type: float
+      description: Absolute error |C_eq - C_target| in Farads
+    behavior:
+      - Return abs(ceq - target)
+      - Always non-negative
+    examples:
+      - input: ceq=5.2e-12, target=5.0e-12
+        output: 0.2e-12
+      - input: ceq=3.0e-12, target=5.0e-12
+        output: 2.0e-12
+    errors: []
+    requirements:
+      - FR-023
+
+  - name: calculate_relative_error
+    description: Calculate relative error as percentage
+    signature: |
+      def calculate_relative_error(ceq: float, target: float) -> float
+    parameters:
+      - name: ceq
+        type: float
+        description: Equivalent capacitance in Farads
+        constraints:
+          - Must be >= 0
+      - name: target
+        type: float
+        description: Target capacitance in Farads
+        constraints:
+          - Must be > 0
+    returns:
+      type: float
+      description: Relative error percentage (|C_eq - C_target| / C_target) × 100
+    behavior:
+      - Calculate (abs(ceq - target) / target) * 100
+      - Handle division by zero when target=0: return float('inf') or raise ValueError
+      - Always non-negative percentage
+    examples:
+      - input: ceq=5.2e-12, target=5.0e-12
+        output: 4.0  # (0.2e-12 / 5.0e-12) × 100 = 4%
+      - input: ceq=3.0e-12, target=5.0e-12
+        output: 40.0  # (2.0e-12 / 5.0e-12) × 100 = 40%
+      - input: ceq=5.0e-12, target=0.0
+        output: inf (or raise ValueError)
+    errors:
+      - type: ValueError
+        condition: If target == 0
+        handling: Raise with message "Cannot calculate relative error with zero target" or return inf
+    requirements:
+      - FR-024, FR-027
+
+  - name: check_within_tolerance
+    description: Check if solution is within tolerance threshold
+    signature: |
+      def check_within_tolerance(relative_error: float, tolerance: float) -> bool
+    parameters:
+      - name: relative_error
+        type: float
+        description: Relative error percentage
+      - name: tolerance
+        type: float
+        description: Tolerance threshold percentage (e.g., 5.0 for ±5%)
+        constraints:
+          - Must be >= 0
+    returns:
+      type: bool
+      description: True if relative_error <= tolerance, False otherwise
+    behavior:
+      - Return relative_error <= tolerance
+      - Tolerance is symmetric (±)
+    examples:
+      - input: relative_error=3.0, tolerance=5.0
+        output: True  # 3% is within ±5%
+      - input: relative_error=7.0, tolerance=5.0
+        output: False  # 7% exceeds ±5%
+    errors: []
+    requirements:
+      - FR-025, FR-026
+
+  - name: create_solution
+    description: Create Solution object with all metrics calculated
+    signature: |
+      def create_solution(
+          topology: Union[SPNode, GraphTopology],
+          target: float,
+          tolerance: float,
+          capacitor_labels: list[str]
+      ) -> Solution
+    parameters:
+      - name: topology
+        type: Union[SPNode, GraphTopology]
+        description: Network topology
+      - name: target
+        type: float
+        description: Target capacitance in Farads
+        constraints:
+          - Must be > 0
+      - name: tolerance
+        type: float
+        description: Tolerance threshold percentage
+      - name: capacitor_labels
+        type: list[str]
+        description: Labels for capacitors (e.g., ["C1", "C2"])
+    returns:
+      type: Solution
+      description: Complete solution with all fields populated
+    behavior:
+      - Calculate C_eq from topology (using calculate_sp_ceq or calculate_graph_ceq)
+      - Calculate absolute_error = calculate_absolute_error(ceq, target)
+      - Calculate relative_error = calculate_relative_error(ceq, target)
+      - Determine within_tolerance = check_within_tolerance(relative_error, tolerance)
+      - Generate expression string from topology
+      - Set diagram = None (generated lazily in UI)
+    examples:
+      - input: topology=Parallel(Leaf(0), Leaf(1)), target=8e-12, tolerance=5.0, labels=["C1", "C2"]
+        output: Solution(topology=..., ceq=8e-12, target=8e-12, absolute_error=0, relative_error=0, within_tolerance=True, expression="(C1||C2)", diagram=None)
+    errors:
+      - type: ValueError
+        condition: If target <= 0
+        handling: Raise with message "Target capacitance must be positive"
+    requirements:
+      - FR-023, FR-024, FR-025, FR-026
+
+  - name: rank_solutions
+    description: Sort solutions by absolute error (best first)
+    signature: |
+      def rank_solutions(solutions: list[Solution]) -> list[Solution]
+    parameters:
+      - name: solutions
+        type: list[Solution]
+        description: Unsorted list of solutions
+    returns:
+      type: list[Solution]
+      description: Solutions sorted by absolute_error (ascending)
+    behavior:
+      - Sort by absolute_error in ascending order (smallest error first)
+      - Stable sort (preserve order for equal errors)
+      - Do not modify original list (return new list)
+    examples:
+      - input: [Solution(abs_err=2.0), Solution(abs_err=0.5), Solution(abs_err=1.0)]
+        output: [Solution(abs_err=0.5), Solution(abs_err=1.0), Solution(abs_err=2.0)]
+    errors: []
+    requirements:
+      - FR-016
+
+  - name: filter_by_tolerance
+    description: Filter solutions to only those within tolerance
+    signature: |
+      def filter_by_tolerance(solutions: list[Solution]) -> list[Solution]
+    parameters:
+      - name: solutions
+        type: list[Solution]
+        description: List of solutions (may include out-of-tolerance)
+    returns:
+      type: list[Solution]
+      description: Only solutions where within_tolerance == True
+    behavior:
+      - Filter where solution.within_tolerance is True
+      - Preserve order (do not re-sort)
+      - Return empty list if no solutions meet tolerance
+    examples:
+      - input: [Solution(within_tol=True), Solution(within_tol=False), Solution(within_tol=True)]
+        output: [Solution(within_tol=True), Solution(within_tol=True)]
+    errors: []
+    requirements:
+      - FR-026, FR-046
+
+types:
+  - name: Solution
+    description: Complete solution with topology and metrics
+    fields:
+      - name: topology
+        type: Union[SPNode, GraphTopology]
+        description: Network structure
+      - name: ceq
+        type: float
+        description: Equivalent capacitance in Farads
+      - name: target
+        type: float
+        description: Target capacitance in Farads
+      - name: absolute_error
+        type: float
+        description: |C_eq - C_target| in Farads
+      - name: relative_error
+        type: float
+        description: (|C_eq - C_target| / C_target) × 100 (percentage)
+      - name: within_tolerance
+        type: bool
+        description: True if relative_error <= tolerance
+      - name: expression
+        type: str
+        description: Human-readable topology (e.g., "((C1||C2)+C3)")
+      - name: diagram
+        type: Optional[matplotlib.Figure]
+        description: Visual representation (generated lazily)
+
+invariants:
+  - absolute_error = abs(ceq - target)
+  - relative_error = (absolute_error / target) × 100 if target > 0
+  - within_tolerance = (relative_error <= tolerance)
+  - ceq >= 0
+  - target > 0
+  - absolute_error >= 0
+  - relative_error >= 0
+
+edge_cases:
+  - target = 0: relative_error = inf (or raise ValueError)
+  - ceq = 0 (disconnected network): valid, absolute_error = target
+  - All solutions out of tolerance: filter_by_tolerance returns empty list

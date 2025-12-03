@@ -1,0 +1,155 @@
+# API Contract: capassigner.core.graphs
+# Module: Graph topology and Laplacian analysis
+# Requirements: FR-003 to FR-007
+
+module: capassigner.core.graphs
+description: Compute equivalent capacitance for general graph topologies using Laplacian-based nodal analysis
+version: 1.0.0
+
+functions:
+  - name: calculate_graph_ceq
+    description: Calculate equivalent capacitance using Laplacian matrix method
+    signature: |
+      def calculate_graph_ceq(
+          graph: nx.Graph,
+          terminal_a: str = 'A',
+          terminal_b: str = 'B'
+      ) -> tuple[float, Optional[str]]
+    parameters:
+      - name: graph
+        type: nx.Graph
+        description: NetworkX graph with capacitance as edge attribute
+        constraints:
+          - Must contain terminal_a and terminal_b as nodes
+          - All edges must have 'capacitance' attribute (float > 0)
+      - name: terminal_a
+        type: str
+        description: Node identifier for terminal A
+        default: 'A'
+      - name: terminal_b
+        type: str
+        description: Node identifier for terminal B
+        default: 'B'
+    returns:
+      type: tuple[float, Optional[str]]
+      description: (C_eq in Farads, warning message or None)
+    behavior:
+      - Construct Laplacian matrix L where:
+        - L[i][i] = sum of capacitances at node i (diagonal)
+        - L[i][j] = -C_ij if edge exists between i and j (off-diagonal)
+      - Apply boundary conditions: V_A = 1, V_B = 0
+      - Solve for internal node voltages using reduced system
+      - Calculate current I_A = sum of (C_ij * (V_i - V_j)) for edges connected to A
+      - Return C_eq = I_A / (V_A - V_B) = I_A
+      - Handle edge cases:
+        - Disconnected network (no path A to B): Return (0.0, "No path between A and B")
+        - Singular matrix: Use pseudo-inverse, return (C_eq, "Warning: Singular matrix, using pseudo-inverse")
+        - Floating nodes: Warn but attempt to solve
+    examples:
+      - input: Simple series A--[10pF]--[10pF]--B
+        output: (5e-12, None)  # 1/(1/10e-12 + 1/10e-12) = 5pF
+      - input: Simple parallel A--[5pF]--B, A--[3pF]--B
+        output: (8e-12, None)  # 5pF + 3pF = 8pF
+      - input: Disconnected A--[5pF], B (no connection)
+        output: (0.0, "No path between A and B")
+    errors:
+      - type: ValueError
+        condition: If terminal_a or terminal_b not in graph
+        handling: Raise with message "Terminals A and B must be nodes in graph"
+      - type: ValueError
+        condition: If any edge missing 'capacitance' attribute
+        handling: Raise with message "All edges must have 'capacitance' attribute"
+    requirements:
+      - FR-003, FR-004, FR-005, FR-006, FR-007
+
+  - name: is_connected_between_terminals
+    description: Check if path exists between terminals A and B
+    signature: |
+      def is_connected_between_terminals(
+          graph: nx.Graph,
+          terminal_a: str = 'A',
+          terminal_b: str = 'B'
+      ) -> bool
+    parameters:
+      - name: graph
+        type: nx.Graph
+        description: NetworkX graph
+      - name: terminal_a
+        type: str
+        description: Node identifier for terminal A
+      - name: terminal_b
+        type: str
+        description: Node identifier for terminal B
+    returns:
+      type: bool
+      description: True if path exists from A to B, False otherwise
+    behavior:
+      - Use NetworkX nx.has_path(graph, terminal_a, terminal_b)
+      - Return False if either terminal not in graph
+    examples:
+      - input: A--[C1]--B
+        output: True
+      - input: A--[C1], B (no connection)
+        output: False
+    errors: []
+    requirements:
+      - FR-006
+
+  - name: build_laplacian_matrix
+    description: Construct Laplacian matrix from graph
+    signature: |
+      def build_laplacian_matrix(
+          graph: nx.Graph
+      ) -> tuple[np.ndarray, list[str]]
+    parameters:
+      - name: graph
+        type: nx.Graph
+        description: NetworkX graph with capacitance edge attributes
+    returns:
+      type: tuple[np.ndarray, list[str]]
+      description: (Laplacian matrix, ordered list of node labels)
+    behavior:
+      - Create N×N matrix for N nodes
+      - Diagonal L[i][i] = sum of capacitances at node i
+      - Off-diagonal L[i][j] = -C_ij if edge (i,j) exists, else 0
+      - Return matrix and node order for indexing
+    examples:
+      - input: Graph with A--[5e-12]--B
+        output: (array([[5e-12, -5e-12], [-5e-12, 5e-12]]), ['A', 'B'])
+    errors:
+      - type: ValueError
+        condition: If edge missing 'capacitance' attribute
+        handling: Raise with message "All edges must have 'capacitance' attribute"
+    requirements:
+      - FR-003
+
+types:
+  - name: GraphTopology
+    description: General graph network representation
+    fields:
+      - name: graph
+        type: nx.Graph
+        description: NetworkX graph
+      - name: terminal_a
+        type: str
+        description: Node identifier for terminal A
+      - name: terminal_b
+        type: str
+        description: Node identifier for terminal B
+      - name: internal_nodes
+        type: list[str]
+        description: Internal node identifiers (excluding A and B)
+
+invariants:
+  - Laplacian matrix is symmetric (L[i][j] == L[j][i])
+  - Laplacian matrix rows sum to zero (property of Laplacian)
+  - All capacitance values are positive
+  - Disconnected networks return C_eq = 0
+  - Singular matrices handled gracefully (no crashes)
+
+numerical_stability:
+  - Use double precision (np.float64)
+  - Check condition number before solving (np.linalg.cond)
+  - Add small regularization (1e-12 * I) if near-singular
+  - Use pseudo-inverse (np.linalg.pinv) for singular matrices
+  - Check for NaN and Inf in results
