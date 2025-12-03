@@ -223,18 +223,22 @@ def find_best_sp_solutions(
 
     # Calculate C_eq and create solutions
     solutions = []
-    seen_expressions = set()  # Track unique expressions to avoid duplicates
+    seen_ceq_values = set()  # Track unique C_eq values to avoid duplicates
     
     for topology in topologies:
         try:
             ceq = calculate_sp_ceq(topology)
-            expression = sp_node_to_expression(topology, capacitor_labels)
             
-            # Skip duplicate expressions (same topology, different tree structure)
-            if expression in seen_expressions:
+            # Round C_eq to 12 significant digits to detect numerical duplicates
+            # This handles floating-point precision while catching true duplicates
+            ceq_rounded = round(ceq, 15)  # 15 decimal places for femtofarad precision
+            
+            # Skip duplicate C_eq values (different topologies, same result)
+            if ceq_rounded in seen_ceq_values:
                 continue
-            seen_expressions.add(expression)
+            seen_ceq_values.add(ceq_rounded)
             
+            expression = sp_node_to_expression(topology, capacitor_labels)
             solution = create_solution(topology, ceq, target, tolerance, expression)
             solutions.append(solution)
         except (ZeroDivisionError, TypeError) as e:
