@@ -1,0 +1,137 @@
+# API Contract: capassigner.core.sp_enumeration
+# Module: SP exhaustive algorithm
+# Requirements: FR-013 to FR-017
+
+module: capassigner.core.sp_enumeration
+description: Enumerate all series-parallel topologies using dynamic programming with memoization
+version: 1.0.0
+
+functions:
+  - name: enumerate_sp_topologies
+    description: Generate all possible SP topologies for given capacitors
+    signature: |
+      def enumerate_sp_topologies(
+          capacitors: list[float],
+          progress_cb: Optional[Callable[[ProgressUpdate], None]] = None
+      ) -> list[SPNode]
+    parameters:
+      - name: capacitors
+        type: list[float]
+        description: List of capacitance values in Farads
+        constraints:
+          - Length must be >= 1
+          - All values must be > 0
+      - name: progress_cb
+        type: Optional[Callable[[ProgressUpdate], None]]
+        description: Optional callback for progress updates
+        default: None
+    returns:
+      type: list[SPNode]
+      description: All possible SP topologies (not ranked)
+    behavior:
+      - Use recursive enumeration with memoization
+      - Base case: 1 capacitor → [Leaf(0, capacitors[0])]
+      - Recursive case: N capacitors → partition into two non-empty subsets, enumerate each, combine with Series and Parallel
+      - Memoization key: frozenset of capacitor indices (order-independent)
+      - Report progress every 50-100 topologies via progress_cb
+      - Do NOT rank or filter results (return all topologies)
+    complexity:
+      - Catalan(N) × N! where Catalan(N) ≈ 4^N / (N^1.5 * sqrt(π))
+      - N=5: ~100-200 topologies
+      - N=8: ~10,000-20,000 topologies (practical limit)
+    examples:
+      - input: [5e-12, 10e-12]
+        output: [Series(Leaf(0), Leaf(1)), Parallel(Leaf(0), Leaf(1)), Series(Leaf(1), Leaf(0)), Parallel(Leaf(1), Leaf(0))]
+        note: 4 topologies (2 types × 2 orders; can be reduced by considering commutativity)
+    errors:
+      - type: ValueError
+        condition: If capacitors list is empty
+        handling: Raise with message "Cannot enumerate topologies with zero capacitors"
+      - type: ValueError
+        condition: If any capacitor value <= 0
+        handling: Raise with message "All capacitor values must be positive"
+    requirements:
+      - FR-013, FR-014, FR-015
+
+  - name: find_best_sp_solutions
+    description: Find top-K SP solutions ranked by error
+    signature: |
+      def find_best_sp_solutions(
+          capacitors: list[float],
+          target: float,
+          tolerance: float = 5.0,
+          top_k: int = 10,
+          progress_cb: Optional[Callable[[ProgressUpdate], None]] = None
+      ) -> list[Solution]
+    parameters:
+      - name: capacitors
+        type: list[float]
+        description: Available capacitance values in Farads
+      - name: target
+        type: float
+        description: Target capacitance in Farads
+        constraints:
+          - Must be > 0
+      - name: tolerance
+        type: float
+        description: Acceptable relative error percentage (default 5.0 for ±5%)
+        default: 5.0
+      - name: top_k
+        type: int
+        description: Number of best solutions to return
+        default: 10
+      - name: progress_cb
+        type: Optional[Callable[[ProgressUpdate], None]]
+        description: Optional callback for progress updates
+        default: None
+    returns:
+      type: list[Solution]
+      description: Top-K solutions sorted by absolute error (best first)
+    behavior:
+      - Call enumerate_sp_topologies to get all topologies
+      - Calculate C_eq for each topology
+      - Compute error metrics (absolute and relative)
+      - Sort by absolute error (ascending)
+      - Return top K solutions
+      - Mark solutions within tolerance (relative_error <= tolerance)
+    examples:
+      - input: capacitors=[5e-12, 10e-12], target=7.5e-12, top_k=2
+        output: [Solution with (C1||C2), Solution with (C1+C2 in series)]
+        note: Parallel gives 15pF (error 7.5pF), series gives 3.33pF (error 4.17pF); series is better
+    errors:
+      - type: ValueError
+        condition: If target <= 0
+        handling: Raise with message "Target capacitance must be positive"
+      - type: ValueError
+        condition: If tolerance < 0
+        handling: Raise with message "Tolerance cannot be negative"
+    requirements:
+      - FR-016, FR-017
+
+types:
+  - name: ProgressUpdate
+    description: Progress information for long operations
+    fields:
+      - name: current
+        type: int
+        description: Current iteration or topology count
+      - name: total
+        type: int
+        description: Total iterations or topologies
+      - name: message
+        type: str
+        description: Descriptive text (e.g., "Exploring topology 123/1000")
+      - name: best_error
+        type: Optional[float]
+        description: Best error found so far (for heuristic search; None for SP)
+
+performance:
+  - N <= 5: < 1 second
+  - N = 8: ~3 seconds (performance goal SC-002)
+  - N > 8: Warn user to use heuristic method (FR-017, FR-035)
+
+invariants:
+  - All returned topologies are valid SPNode structures
+  - Solutions are sorted by absolute error (ascending)
+  - Top-K solutions are the K best (if K < total topologies)
+  - Memoization prevents redundant computation

@@ -121,3 +121,11 @@ dmypy.json
 
 # Streamlit
 .streamlit/secrets.toml
+
+# IDE and OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.tmp

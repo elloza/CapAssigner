@@ -3,78 +3,168 @@
 This module contains all help text (tooltips) for Streamlit widgets,
 ensuring consistency and easy maintenance of user-facing documentation.
 
-This is a placeholder module created during scaffolding.
-Implementation details will be added in subsequent features.
+Constitutional Compliance:
+    - Principle II (UX First): Clear, helpful tooltip text
+    - Principle III (Robust Input): Input format examples and constraints
 """
 
 # Capacitor input tooltips
 TOOLTIP_CAP_LIST = """
-Enter capacitor values with units (pF, nF, µF, mF, F).
-Supports scientific notation: 1e-11, 1.2*10^-12
+**Enter capacitor values, one per line or comma-separated.**
+
+**Supported formats:**
+- With units: `1pF`, `2.2nF`, `100µF`, `0.1mF`, `1F`
+- Scientific notation: `1e-12`, `2.2e-9`, `1.5*10^-6`
+- Plain numbers (interpreted as Farads): `0.000000000001`
+
+**Examples:**
+```
+1pF
+2.2pF, 4.7pF
+1e-12
+100nF
+```
 """
 
 TOOLTIP_CAP_TARGET = """
-Target equivalent capacitance. Accepts same formats as capacitor list.
-Example: 5.2pF, 0.1µF, 1e-11
+**Target equivalent capacitance to achieve.**
+
+**Supported formats:**
+- With units: `5.2pF`, `0.1µF`, `100nF`
+- Scientific notation: `1e-11`, `5.2*10^-12`
+- Plain numbers (Farads): `0.0000000000052`
+
+**Examples:** `5.2pF`, `0.1µF`, `1e-11`
+
+The synthesis algorithm will find capacitor networks
+with equivalent capacitance as close as possible to this target.
 """
 
 TOOLTIP_TOLERANCE = """
-Absolute tolerance (margin of error) for matching the target.
-Default: 1% of target capacitance.
+**Acceptable error percentage (±).**
+
+Solutions with relative error ≤ tolerance will be marked as "within tolerance".
+
+- Default: 1%
+- Example: 5% means solutions within ±5% of target are acceptable
+
+**Note:** This does not filter results, only marks which solutions meet the tolerance.
 """
 
 # Method selection tooltips
 TOOLTIP_METHOD_SIMPLE = """
-Fast two-level series-parallel combinations.
-Suitable for quick approximations with any number of capacitors.
+**Fast two-level series-parallel combinations.**
+
+Quick approximations suitable for any number of capacitors.
+Limited to simple topologies.
 """
 
 TOOLTIP_METHOD_SP_EXHAUSTIVE = """
-Exhaustive enumeration of all series-parallel topologies.
-Exact solution for SP networks, but limited to N ≤ 8 capacitors.
-Complexity: ≈ Catalan(N) × N!
+**SP Exhaustive - Series-Parallel Enumeration**
+
+Exhaustively enumerates ALL possible series-parallel topologies
+using the given capacitors.
+
+- ✅ **Guaranteed optimal** within SP networks
+- ⚠️ **Slow for N > 8** (Catalan × N! complexity)
+- 📐 Topologies: Binary trees with series/parallel operations
 """
 
 TOOLTIP_METHOD_HEURISTIC = """
-Heuristic search for general (non-SP) network topologies.
-Can handle bridges, meshes, and internal nodes.
-Recommended for N > 8 or when SP search is too slow.
+**Heuristic Graph Search - Random Exploration**
+
+Randomly generates graph topologies including non-SP networks
+(bridges, meshes, delta/wye configurations).
+
+- ✅ Handles **N > 8** efficiently
+- ✅ Discovers **non-SP solutions**
+- ⚠️ **No optimality guarantee** (probabilistic)
+- 🎲 **Deterministic** with seed parameter
 """
 
 TOOLTIP_MAX_N_SP = """
-Maximum number of capacitors for exhaustive SP enumeration.
-Higher values may cause long computation times.
-Constitutional default: 8
+**Maximum capacitors for SP Exhaustive enumeration.**
+
+Higher values dramatically increase computation time.
+- N=6: ~5,040 topologies (fast)
+- N=7: ~35,280 topologies (moderate)
+- N=8: ~264,600 topologies (slow)
+- N>8: Not recommended (use Heuristic instead)
+
+**Constitutional default:** 8
 """
 
 # Heuristic parameters
 TOOLTIP_HEURISTIC_ITERS = """
-Number of random topologies to evaluate.
-More iterations = better coverage, but longer execution time.
-Constitutional default: 2000
+**Number of random graph topologies to explore.**
+
+More iterations = higher probability of finding optimal solution.
+
+- **100-500**: Quick exploration
+- **1000-2000**: Balanced (default)
+- **5000-10000**: Thorough search
+
+**Trade-off:** More iterations = longer execution time.
+**Constitutional default:** 2000
 """
 
 TOOLTIP_HEURISTIC_INTERNAL = """
-Maximum number of internal nodes (besides terminals A and B).
-More nodes = more expressive networks, but higher complexity.
-Constitutional default: 2
+**Maximum internal nodes (besides terminals A and B).**
+
+Internal nodes allow more complex topologies:
+- **0**: Direct connections only (simple graphs)
+- **1**: Allows Y/Delta structures
+- **2**: Enables complex bridges (default)
+- **3+**: Very complex topologies
+
+**Trade-off:** More nodes = larger search space.
+**Constitutional default:** 2
 """
 
 TOOLTIP_SEED = """
-Random seed for reproducible results.
-Same seed → same heuristic output.
-Constitutional default: 0
+**Random seed for reproducible results.**
+
+Using the same seed with identical inputs produces identical results.
+
+- **0**: Use default seed
+- **Any positive integer**: Custom seed for reproducibility
+
+**Use case:** Set a seed to share and reproduce exact results.
+**Constitutional default:** 0
 """
 
 # UI appearance
 TOOLTIP_UI_SCALE = """
-Global UI scaling factor.
+**Global UI scaling factor.**
+
 Adjusts text size and widget dimensions.
 """
 
 TOOLTIP_DIAGRAM_SCALE = """
-Scaling factor for circuit diagrams and graphs.
+**Scaling factor for circuit diagrams and graphs.**
+
 Larger values = bigger visualizations.
+"""
+
+# Results tooltips
+TOOLTIP_RESULTS_CEQ = """
+**Equivalent capacitance of the network topology.**
+
+Calculated using:
+- **SP topologies**: Series/parallel formulas
+- **Graph topologies**: Laplacian nodal analysis
+"""
+
+TOOLTIP_RESULTS_ERROR = """
+**Absolute error = |C_eq - C_target|**
+
+The difference between achieved and target capacitance.
+"""
+
+TOOLTIP_RESULTS_REL_ERROR = """
+**Relative error = |C_eq - C_target| / C_target × 100%**
+
+Percentage deviation from target. Lower is better.
 """
 
 
@@ -83,13 +173,19 @@ def get_tooltip(key: str) -> str:
 
     Args:
         key: Tooltip identifier (e.g., 'CAP_LIST', 'METHOD_SP').
+             The 'TOOLTIP_' prefix is optional.
 
     Returns:
         Tooltip text string, or empty string if key not found.
 
     Example:
+        >>> get_tooltip('CAP_TARGET')
+        'Target equivalent capacitance. Accepts same formats...'
         >>> get_tooltip('TOOLTIP_CAP_TARGET')
         'Target equivalent capacitance. Accepts same formats...'
     """
-    # Placeholder implementation
-    return globals().get(f"TOOLTIP_{key}", "")
+    # Handle both with and without prefix
+    if not key.startswith("TOOLTIP_"):
+        key = f"TOOLTIP_{key}"
+    
+    return globals().get(key, "")

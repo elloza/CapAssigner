@@ -1,0 +1,115 @@
+# API Contract: capassigner.core.sp_structures
+# Module: Series-parallel data types and formulas
+# Requirements: FR-001, FR-002
+
+module: capassigner.core.sp_structures
+description: Define series-parallel tree structures and compute equivalent capacitance
+version: 1.0.0
+
+types:
+  - name: Leaf
+    description: Single capacitor node in SP tree
+    fields:
+      - name: capacitor_index
+        type: int
+        description: Index into capacitor inventory
+        constraints:
+          - Must be >= 0
+      - name: value
+        type: float
+        description: Capacitance value in Farads
+        constraints:
+          - Must be > 0
+
+  - name: Series
+    description: Two sub-topologies connected in series
+    fields:
+      - name: left
+        type: SPNode
+        description: Left sub-topology
+      - name: right
+        type: SPNode
+        description: Right sub-topology
+
+  - name: Parallel
+    description: Two sub-topologies connected in parallel
+    fields:
+      - name: left
+        type: SPNode
+        description: Left sub-topology
+      - name: right
+        type: SPNode
+        description: Right sub-topology
+
+  - name: SPNode
+    description: Union type for series-parallel trees
+    variants:
+      - Leaf
+      - Series
+      - Parallel
+
+functions:
+  - name: calculate_sp_ceq
+    description: Calculate equivalent capacitance for series-parallel topology
+    signature: |
+      def calculate_sp_ceq(node: SPNode) -> float
+    parameters:
+      - name: node
+        type: SPNode
+        description: Root of SP tree
+    returns:
+      type: float
+      description: Equivalent capacitance in Farads
+    behavior:
+      - Leaf: Return node.value
+      - Series: Return 1 / (1/C_left + 1/C_right) where C_left = calculate_sp_ceq(node.left)
+      - Parallel: Return C_left + C_right where C_left = calculate_sp_ceq(node.left)
+      - Formulas must match FR-001 (parallel) and FR-002 (series) exactly
+    examples:
+      - input: Leaf(0, 5.2e-12)
+        output: 5.2e-12
+      - input: Series(Leaf(0, 10e-12), Leaf(1, 10e-12))
+        output: 5e-12  # 1/(1/10e-12 + 1/10e-12) = 5e-12
+      - input: Parallel(Leaf(0, 5e-12), Leaf(1, 3e-12))
+        output: 8e-12  # 5e-12 + 3e-12 = 8e-12
+    errors:
+      - type: ZeroDivisionError
+        condition: If any capacitor in series has value = 0 (should not happen with validation)
+        handling: Raise with message "Cannot compute series capacitance with zero-value capacitor"
+    requirements:
+      - FR-001, FR-002
+
+  - name: sp_node_to_expression
+    description: Generate human-readable topology expression
+    signature: |
+      def sp_node_to_expression(node: SPNode, capacitor_labels: list[str]) -> str
+    parameters:
+      - name: node
+        type: SPNode
+        description: Root of SP tree
+      - name: capacitor_labels
+        type: list[str]
+        description: Labels for capacitors (e.g., ["C1", "C2", "C3"])
+    returns:
+      type: str
+      description: Expression like "((C1||C2)+C3)"
+    behavior:
+      - Leaf: Return capacitor label (e.g., "C1")
+      - Series: Return f"({left_expr}+{right_expr})"
+      - Parallel: Return f"({left_expr}||{right_expr})"
+      - Outer parentheses can be omitted for simplicity
+    examples:
+      - input: Series(Parallel(Leaf(0), Leaf(1)), Leaf(2)), labels=["C1", "C2", "C3"]
+        output: "((C1||C2)+C3)"
+      - input: Parallel(Leaf(0), Leaf(1)), labels=["C1", "C2"]
+        output: "(C1||C2)"
+    errors: []
+    requirements:
+      - FR-015
+
+invariants:
+  - All Leaf nodes reference valid capacitor indices (0 <= index < len(inventory))
+  - All capacitor values are positive (value > 0)
+  - SP trees have no cycles (enforced by tree structure)
+  - Series formula: C_s = 1 / (1/C_left + 1/C_right)
+  - Parallel formula: C_p = C_left + C_right

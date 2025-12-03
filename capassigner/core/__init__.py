@@ -8,7 +8,7 @@ Modules:
     - sp_structures: Series-Parallel tree data structures
     - sp_enumeration: Enumeration algorithms for SP networks
     - graphs: General graph-based capacitor network algorithms
-    - heuristics: Metaheuristic optimization algorithms (GA, SA, PSO)
+    - heuristics: Heuristic search algorithms for graph networks
     - metrics: Solution quality metrics and ranking
 
 Design Principles:
@@ -27,11 +27,54 @@ from capassigner.core import (
     sp_structures,
 )
 
+# Export key types for easy access
+from capassigner.core.sp_structures import (
+    Capacitor,
+    Leaf,
+    Series,
+    Parallel,
+    SPNode,
+)
+from capassigner.core.metrics import (
+    ProgressUpdate,
+    ProgressCallback,
+    Solution,
+)
+from capassigner.core.graphs import (
+    GraphTopology,
+    build_laplacian_matrix,
+    is_connected_between_terminals,
+    calculate_graph_ceq,
+)
+from capassigner.core.heuristics import (
+    generate_random_graph,
+    heuristic_search,
+)
+
 __all__ = [
+    # Modules
     "graphs",
     "heuristics",
     "metrics",
     "parsing",
     "sp_enumeration",
     "sp_structures",
+    # SP Types
+    "Capacitor",
+    "Leaf",
+    "Series",
+    "Parallel",
+    "SPNode",
+    # Metrics Types
+    "ProgressUpdate",
+    "ProgressCallback",
+    "Solution",
+    # Graph Types
+    "GraphTopology",
+    "build_laplacian_matrix",
+    "is_connected_between_terminals",
+    "calculate_graph_ceq",
+    # Heuristics
+    "generate_random_graph",
+    "heuristic_search",
 ]

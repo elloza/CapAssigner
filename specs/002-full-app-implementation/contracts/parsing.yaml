@@ -1,0 +1,109 @@
+# API Contract: capassigner.core.parsing
+# Module: Input parsing and formatting
+# Requirements: FR-008 to FR-012
+
+module: capassigner.core.parsing
+description: Parse capacitance values from various string formats and format values for display
+version: 1.0.0
+
+functions:
+  - name: parse_capacitance
+    description: Parse capacitance value from string input supporting multiple formats
+    signature: |
+      def parse_capacitance(input_str: str) -> ParsedCapacitance
+    parameters:
+      - name: input_str
+        type: str
+        description: Input string (e.g., "5.2pF", "1e-11", "0.000000000052")
+        constraints:
+          - Must be non-empty string
+    returns:
+      type: ParsedCapacitance
+      description: Parsed result with value (if success) or error message (if failure)
+      fields:
+        - success: bool (True if parsing succeeded)
+        - value: Optional[float] (Farads; None if failed)
+        - error_message: Optional[str] (None if succeeded)
+        - formatted: str (human-readable format)
+    behavior:
+      - Accepts unit suffixes: pF, nF, µF, uF, mF, F
+      - Accepts scientific notation: 1e-11, 1.2e-12, 1*10^-11, 1.2*10^-12
+      - Accepts plain decimals: 0.0000000001, 5.2
+      - Rejects lowercase unit suffix (e.g., "5pf" → error "use '5pF' with capital F")
+      - Rejects invalid formats with actionable error messages
+    examples:
+      - input: "5.2pF"
+        output: ParsedCapacitance(success=True, value=5.2e-12, error_message=None, formatted="5.2pF")
+      - input: "1e-11"
+        output: ParsedCapacitance(success=True, value=1e-11, error_message=None, formatted="10pF")
+      - input: "5pf"
+        output: ParsedCapacitance(success=False, value=None, error_message="Invalid format '5pf' — use '5pF' with capital F", formatted="")
+      - input: "abc"
+        output: ParsedCapacitance(success=False, value=None, error_message="Cannot parse 'abc'. Expected formats: '5.2pF', '1e-11', '0.000000000052'", formatted="")
+    errors:
+      - type: ValueError (internal)
+        condition: If input_str is empty
+        handling: Return ParsedCapacitance with success=False and error message
+    requirements:
+      - FR-008, FR-009, FR-010, FR-011
+
+  - name: format_capacitance
+    description: Format capacitance value as human-readable string with appropriate unit
+    signature: |
+      def format_capacitance(value: float, precision: int = 3) -> str
+    parameters:
+      - name: value
+        type: float
+        description: Capacitance in Farads
+        constraints:
+          - Must be non-negative
+      - name: precision
+        type: int
+        description: Number of significant figures (default 3)
+        constraints:
+          - Must be >= 1
+    returns:
+      type: str
+      description: Formatted string with unit (e.g., "5.2pF", "1.23nF")
+    behavior:
+      - Choose unit based on magnitude:
+        - value < 1e-9: use pF
+        - 1e-9 <= value < 1e-6: use nF
+        - 1e-6 <= value < 1e-3: use µF
+        - 1e-3 <= value < 1: use mF
+        - value >= 1: use F
+      - Format with specified precision (significant figures)
+      - Use capital F for Farad unit
+    examples:
+      - input: 5.2e-12
+        output: "5.2pF"
+      - input: 1.234e-9
+        output: "1.23nF" (precision=3)
+      - input: 0.0
+        output: "0pF"
+    errors:
+      - type: ValueError
+        condition: If value < 0
+        handling: Raise with message "Capacitance cannot be negative"
+    requirements:
+      - FR-012
+
+types:
+  - name: ParsedCapacitance
+    description: Result of parsing capacitance input
+    fields:
+      - name: success
+        type: bool
+        description: True if parsing succeeded
+      - name: value
+        type: Optional[float]
+        description: Parsed capacitance in Farads (None if failed)
+      - name: error_message
+        type: Optional[str]
+        description: Error explanation (None if succeeded)
+      - name: formatted
+        type: str
+        description: Human-readable format (empty if failed)
+    invariants:
+      - If success=True, value must be non-None and error_message must be None
+      - If success=False, value must be None and error_message must be non-None

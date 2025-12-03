@@ -1,0 +1,169 @@
+# API Contract: capassigner.core.heuristics
+# Module: Random graph generation for heuristic search
+# Requirements: FR-018 to FR-022
+
+module: capassigner.core.heuristics
+description: Generate random graph topologies and find best solutions using heuristic search
+version: 1.0.0
+
+functions:
+  - name: generate_random_graph
+    description: Generate random graph topology with given parameters
+    signature: |
+      def generate_random_graph(
+          capacitors: list[float],
+          max_internal_nodes: int = 2,
+          seed: Optional[int] = None
+      ) -> nx.Graph
+    parameters:
+      - name: capacitors
+        type: list[float]
+        description: Available capacitance values to sample from
+        constraints:
+          - Must be non-empty
+          - All values must be > 0
+      - name: max_internal_nodes
+        type: int
+        description: Maximum number of internal nodes (besides A and B)
+        default: 2
+        constraints:
+          - Must be >= 0
+      - name: seed
+        type: Optional[int]
+        description: Random seed for determinism (None for random)
+        default: None
+    returns:
+      type: nx.Graph
+      description: Random graph with terminals 'A', 'B' and internal nodes
+    behavior:
+      - Use fixed seed if provided (for determinism)
+      - Total nodes = 2 + max_internal_nodes (A, B, plus internal)
+      - Randomly sample number of edges (between n-1 and n*(n-1)/2)
+      - Use nx.gnm_random_graph or similar for random topology
+      - Assign random capacitors from inventory to edges (with replacement)
+      - Ensure graph is connected (regenerate if not)
+      - Label terminals as 'A' and 'B', internal nodes as 'n1', 'n2', etc.
+    examples:
+      - input: capacitors=[5e-12, 10e-12], max_internal_nodes=1, seed=42
+        output: Graph with nodes ['A', 'B', 'n1'] and random edges
+    errors:
+      - type: ValueError
+        condition: If capacitors list is empty
+        handling: Raise with message "Cannot generate graph with no capacitors"
+      - type: ValueError
+        condition: If max_internal_nodes < 0
+        handling: Raise with message "max_internal_nodes must be non-negative"
+    requirements:
+      - FR-018, FR-019
+
+  - name: heuristic_search
+    description: Find best solutions using random graph generation
+    signature: |
+      def heuristic_search(
+          capacitors: list[float],
+          target: float,
+          iterations: int = 2000,
+          max_internal_nodes: int = 2,
+          seed: int = 0,
+          tolerance: float = 5.0,
+          top_k: int = 10,
+          progress_cb: Optional[Callable[[ProgressUpdate], None]] = None
+      ) -> list[Solution]
+    parameters:
+      - name: capacitors
+        type: list[float]
+        description: Available capacitance values in Farads
+      - name: target
+        type: float
+        description: Target capacitance in Farads
+        constraints:
+          - Must be > 0
+      - name: iterations
+        type: int
+        description: Number of random graphs to generate
+        default: 2000
+        constraints:
+          - Must be >= 1
+      - name: max_internal_nodes
+        type: int
+        description: Maximum internal nodes per graph
+        default: 2
+        constraints:
+          - Must be >= 0
+      - name: seed
+        type: int
+        description: Random seed for determinism
+        default: 0
+      - name: tolerance
+        type: float
+        description: Acceptable relative error percentage
+        default: 5.0
+      - name: top_k
+        type: int
+        description: Number of best solutions to return
+        default: 10
+      - name: progress_cb
+        type: Optional[Callable[[ProgressUpdate], None]]
+        description: Optional callback for progress updates
+        default: None
+    returns:
+      type: list[Solution]
+      description: Top-K solutions sorted by absolute error
+    behavior:
+      - Initialize random number generator with seed
+      - For each iteration:
+        - Generate random graph
+        - Calculate C_eq using Laplacian method
+        - Compute error metrics
+        - Track best solutions
+        - Report progress every 50 iterations
+      - Sort all solutions by absolute error
+      - Return top K solutions
+      - Mark solutions within tolerance
+    performance:
+      - 2000 iterations with 2 internal nodes: ~5-10 seconds (goal SC-003)
+    examples:
+      - input: capacitors=[5e-12, 10e-12], target=7.5e-12, iterations=1000, seed=42, top_k=3
+        output: [Solution1, Solution2, Solution3] sorted by error
+    errors:
+      - type: ValueError
+        condition: If target <= 0
+        handling: Raise with message "Target capacitance must be positive"
+      - type: ValueError
+        condition: If iterations < 1
+        handling: Raise with message "Iterations must be at least 1"
+    requirements:
+      - FR-020, FR-021, FR-022
+
+types:
+  - name: ProgressUpdate
+    description: Progress information for heuristic search
+    fields:
+      - name: current
+        type: int
+        description: Current iteration
+      - name: total
+        type: int
+        description: Total iterations
+      - name: message
+        type: str
+        description: Progress message (e.g., "Iteration 1234/2000")
+      - name: best_error
+        type: Optional[float]
+        description: Best absolute error found so far (in Farads)
+
+determinism:
+  - Same seed → same random graphs → same solutions
+  - Verified by test: run twice with same seed, compare results (SC-011)
+  - Different seeds → different exploration paths
+
+performance:
+  - Dominated by Laplacian solves (O(n^3) per graph)
+  - Increasing max_internal_nodes increases solve time
+  - Progress updates every 50 iterations to avoid overhead
+
+invariants:
+  - All generated graphs are connected (A and B have path)
+  - All capacitance values are positive
+  - Solutions are sorted by absolute error
+  - Same seed produces identical results (determinism)
