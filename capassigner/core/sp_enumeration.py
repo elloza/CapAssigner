@@ -186,7 +186,8 @@ def find_best_sp_solutions(
     target: float,
     tolerance: float = 5.0,
     top_k: int = 10,
-    progress_cb: Optional[ProgressCallback] = None
+    progress_cb: Optional[ProgressCallback] = None,
+    deduplicate: bool = True
 ) -> List[Solution]:
     """Find top-K SP solutions ranked by error.
 
@@ -198,6 +199,7 @@ def find_best_sp_solutions(
         tolerance: Acceptable relative error percentage (default 5.0 for ±5%).
         top_k: Number of best solutions to return (default 10).
         progress_cb: Optional callback for progress updates.
+        deduplicate: If True, removes structurally equivalent topologies (default True).
 
     Returns:
         Top-K solutions sorted by absolute error (best first).
@@ -234,12 +236,13 @@ def find_best_sp_solutions(
             
             # Use normalized expression to detect structurally equivalent topologies
             # This handles commutativity: (C1+C2) == (C2+C1), (C1||C2) == (C2||C1)
-            normalized = sp_node_to_normalized_expression(topology, capacitor_labels)
-            
-            # Skip duplicate topologies (same circuit, different tree structure)
-            if normalized in seen_normalized:
-                continue
-            seen_normalized.add(normalized)
+            if deduplicate:
+                normalized = sp_node_to_normalized_expression(topology, capacitor_labels)
+                
+                # Skip duplicate topologies (same circuit, different tree structure)
+                if normalized in seen_normalized:
+                    continue
+                seen_normalized.add(normalized)
             
             # Use original (non-normalized) expression for display
             expression = sp_node_to_expression(topology, capacitor_labels)

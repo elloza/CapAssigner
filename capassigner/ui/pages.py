@@ -566,12 +566,15 @@ tolerance grade:
             # Run computation (T068)
             try:
                 if method == "SP Exhaustive":
+                    # Get deduplicate setting from session state (default True)
+                    deduplicate = st.session_state.get('deduplicate', True)
                     solutions = find_best_sp_solutions(
                         capacitors=capacitor_values,
                         target=target_value,
                         tolerance=tolerance,
                         top_k=top_k,
-                        progress_cb=on_progress
+                        progress_cb=on_progress,
+                        deduplicate=deduplicate
                     )
                 else:  # Heuristic Graph Search
                     solutions = heuristic_search(
@@ -703,13 +706,26 @@ def _display_results(
         st.info("No solutions found within tolerance.")
         return
 
-    # Filter toggle (T086)
-    show_only_within_tolerance = st.checkbox(
-        "Show only within tolerance",
-        value=False,
-        help="When enabled, only solutions with relative error ≤ tolerance are shown.",
-        key="filter_tolerance_toggle"
-    )
+    # Filter toggles
+    col_filter1, col_filter2 = st.columns(2)
+    
+    with col_filter1:
+        show_only_within_tolerance = st.checkbox(
+            "Show only within tolerance",
+            value=False,
+            help="When enabled, only solutions with relative error ≤ tolerance are shown.",
+            key="filter_tolerance_toggle"
+        )
+    
+    with col_filter2:
+        # Note: This checkbox affects next search, not current results
+        deduplicate_solutions = st.checkbox(
+            "Remove duplicate topologies",
+            value=True,
+            help="When enabled, structurally equivalent circuits (e.g., C1+C2 = C2+C1) are shown only once.",
+            key="deduplicate_toggle"
+        )
+        st.session_state.deduplicate = deduplicate_solutions
 
     # Apply filter if enabled
     if show_only_within_tolerance:
