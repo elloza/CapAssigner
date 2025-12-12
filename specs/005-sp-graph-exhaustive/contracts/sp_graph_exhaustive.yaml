@@ -1,0 +1,70 @@
+# API Contract: capassigner.core.sp_graph_exhaustive
+# Module: SP Graph Exhaustive Enumeration and Reduction
+# Requirements: FR-001 to FR-011
+
+module: capassigner.core.sp_graph_exhaustive
+description: Enumerate graph topologies and solve using iterative SP reduction
+version: 1.0.0
+
+functions:
+  - name: solve
+    description: Find all SP-reducible graph topologies for given capacitors and target
+    signature: |
+      def solve(
+          capacitors: List[float],
+          target: float,
+          max_results: int = 10,
+          progress_callback: Optional[Callable[[ProgressUpdate], None]] = None
+      ) -> List[Solution]
+    parameters:
+      - name: capacitors
+        type: List[float]
+        description: List of available capacitance values
+      - name: target
+        type: float
+        description: Target capacitance value
+      - name: max_results
+        type: int
+        default: 10
+        description: Maximum number of solutions to return
+      - name: progress_callback
+        type: Optional[Callable]
+        default: None
+        description: Callback for progress updates
+    returns:
+      type: List[Solution]
+      description: List of valid solutions sorted by absolute error
+
+  - name: generate_topologies
+    description: Generate all unique connected multigraphs with N edges
+    signature: |
+      def generate_topologies(num_edges: int) -> List[nx.MultiGraph]
+    parameters:
+      - name: num_edges
+        type: int
+        description: Number of edges (capacitors)
+    returns:
+      type: List[nx.MultiGraph]
+      description: List of unique graph topologies
+
+  - name: is_sp_reducible
+    description: Check if graph is SP-reducible and calculate C_eq
+    signature: |
+      def is_sp_reducible(
+          graph: nx.MultiGraph,
+          term_a: Any,
+          term_b: Any
+      ) -> Optional[float]
+    parameters:
+      - name: graph
+        type: nx.MultiGraph
+        description: Graph with 'capacity' edge attributes
+      - name: term_a
+        type: Any
+        description: Terminal A node
+      - name: term_b
+        type: Any
+        description: Terminal B node
+    returns:
+      type: Optional[float]
+      description: Equivalent capacitance if reducible, else None
