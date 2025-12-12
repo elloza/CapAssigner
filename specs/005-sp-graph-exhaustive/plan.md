@@ -7,6 +7,8 @@
 
 Implement a new "SP Graph Exhaustive" method that enumerates all connected multigraph topologies with $N$ edges (capacitors) and iteratively reduces them using Series-Parallel rules. This solves the "Classroom Problem" where valid SP circuits have internal nodes (bridge-like structures) that the current tree-based method misses.
 
+**Additionally**, this plan includes fixing the existing SP Tree Enumeration algorithm (`sp_enumeration.py`) which was found to be incomplete (missing non-linear partitions).
+
 ## Technical Context
 
 **Language/Version**: Python 3.11
@@ -17,7 +19,7 @@ Implement a new "SP Graph Exhaustive" method that enumerates all connected multi
 **Project Type**: Web application
 **Performance Goals**: N=6 enumeration in < 30 seconds
 **Constraints**: Must handle internal nodes and iterative reduction
-**Scale/Scope**: Core algorithm + UI integration
+**Scale/Scope**: Core algorithm + UI integration + **Fix existing SP Tree bug**
 
 ## Constitution Check
 

@@ -8,6 +8,14 @@
 
 The current "SP Tree" method generates binary trees, which corresponds to series-parallel graphs that can be constructed by recursively joining two subgraphs in series or parallel. However, this representation misses topologies that have "internal nodes" in their initial representation but are still SP-reducible.
 
+### 1.1 Re-evaluation of SP Tree Failure (Update)
+Further analysis (and external validation) confirms the "Classroom Problem" IS SP-reducible (`Series(C1, Series(Parallel(C2, C4), C3))`).
+The failure of the current SP Tree method is due to a bug in `enumerate_sp_topologies`:
+- It only generates linear partitions (prefix/suffix) of the capacitor list.
+- It misses "crossed" partitions (e.g., `{0, 2}` vs `{1, 3}`).
+- **Correction**: We must fix `sp_enumeration.py` to use `itertools.combinations` for true exhaustive partitioning. This will likely solve the classroom problem within the existing SP Tree framework.
+- **Decision**: We will implement the SP Graph Exhaustive method (as requested) AND fix the SP Tree Enumeration. This provides two independent ways to solve the problem, useful for verification and educational comparison (Tree vs Graph reduction).
+
 **Example**: The "Classroom Problem"
 - Topology: A-C1-C-C2-D-C3-B with C4 connected between C and D.
 - This graph has internal nodes C and D.
