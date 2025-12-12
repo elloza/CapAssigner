@@ -52,7 +52,7 @@ def solve(
                 # Assign capacitors to edges
                 G = G_template.copy()
                 for i, (u, v, k) in enumerate(edges):
-                    G[u][v][k]['capacity'] = cap_perm[i]
+                    G[u][v][k]['capacitance'] = cap_perm[i]
                 
                 ceq = is_sp_reducible(G, term_a, term_b)
                 
@@ -157,7 +157,7 @@ def is_sp_reducible(graph: nx.MultiGraph, term_a: Any, term_b: Any) -> Optional[
                     # Found parallel edges
                     total_cap = 0.0
                     for key in G[u][v]:
-                        total_cap += G[u][v][key]['capacity']
+                        total_cap += G[u][v][key]['capacitance']
                     parallel_reductions.append((u, v, total_cap))
         
         for u, v, total_cap in parallel_reductions:
@@ -166,7 +166,7 @@ def is_sp_reducible(graph: nx.MultiGraph, term_a: Any, term_b: Any) -> Optional[
             for k in keys:
                 G.remove_edge(u, v, key=k)
             # Add single combined edge
-            G.add_edge(u, v, capacity=total_cap)
+            G.add_edge(u, v, capacitance=total_cap)
             changed = True
             
         if changed: continue # Restart loop if modified
@@ -190,13 +190,13 @@ def is_sp_reducible(graph: nx.MultiGraph, term_a: Any, term_b: Any) -> Optional[
                 # Note: G[u][n] is a dict of edges. We take the first one (key 0 usually)
                 # But keys might not be 0 if edges were added/removed.
                 # Use list(G[u][n].values())[0]
-                c1 = list(G[u][series_node].values())[0]['capacity']
-                c2 = list(G[series_node][v].values())[0]['capacity']
+                c1 = list(G[u][series_node].values())[0]['capacitance']
+                c2 = list(G[series_node][v].values())[0]['capacitance']
                 
                 c_new = 1.0 / (1.0/c1 + 1.0/c2)
                 
                 G.remove_node(series_node)
-                G.add_edge(u, v, capacity=c_new)
+                G.add_edge(u, v, capacitance=c_new)
                 changed = True
             elif len(set(neighbors)) == 1:
                 # u -- n -- u (hanging loop). Remove it?
@@ -213,6 +213,6 @@ def is_sp_reducible(graph: nx.MultiGraph, term_a: Any, term_b: Any) -> Optional[
     # Check result
     if G.number_of_nodes() == 2 and G.number_of_edges() == 1:
         if G.has_edge(term_a, term_b):
-             return list(G[term_a][term_b].values())[0]['capacity']
+             return list(G[term_a][term_b].values())[0]['capacitance']
     
     return None

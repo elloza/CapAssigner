@@ -1,0 +1,261 @@
+openapi: 3.0.0
+info:
+  title: PDF Exhaustive Test Contracts
+  version: 1.0.0
+  description: |
+    Test API contracts for PDF reference exercise validation.
+    These are test interfaces, not production APIs.
+
+components:
+  schemas:
+    ReferenceExercise:
+      type: object
+      description: Reference exercise with known expected results
+      required:
+        - id
+        - title
+        - capacitors
+        - capacitor_labels
+        - expected_ceq_F
+        - terminals
+      properties:
+        id:
+          type: string
+          description: Unique identifier
+          example: "pdf2p_association_01"
+        title:
+          type: string
+          description: Human-readable description
+          example: "C1=15uF, C2=3uF, C3=6uF, C4=20uF; target Ceq≈5.96uF"
+        capacitors:
+          type: array
+          description: Capacitor values in Farads (SI units)
+          items:
+            type: number
+            format: double
+            minimum: 1e-12
+            maximum: 1.0
+          minItems: 1
+          example: [1.5e-05, 3e-06, 6e-06, 2e-05]
+        capacitor_labels:
+          type: array
+          description: Human-readable labels
+          items:
+            type: string
+          minItems: 1
+          example: ["C1", "C2", "C3", "C4"]
+        expected_ceq_F:
+          type: number
+          format: double
+          description: Analytical expected equivalent capacitance in Farads
+          minimum: 0
+          exclusiveMinimum: true
+          example: 5.964912280701754e-06
+        terminals:
+          type: object
+          description: Terminal identifiers
+          required:
+            - pos
+            - neg
+          properties:
+            pos:
+              type: string
+              example: "a"
+            neg:
+              type: string
+              example: "b"
+
+    ExplicitTopology:
+      type: object
+      description: Manually constructed series-parallel topology
+      required:
+        - exercise_id
+        - topology
+        - description
+      properties:
+        exercise_id:
+          type: string
+          description: Reference to parent ReferenceExercise
+          example: "pdf2p_association_01"
+        topology:
+          $ref: '#/components/schemas/SPNode'
+        description:
+          type: string
+          description: Human-readable topology structure
+          example: "(C1||C2) in series with (C3||C4)"
+
+    SPNode:
+      description: Series-Parallel node (existing core entity reference)
+      oneOf:
+        - $ref: '#/components/schemas/Leaf'
+        - $ref: '#/components/schemas/Series'
+        - $ref: '#/components/schemas/Parallel'
+
+    Leaf:
+      type: object
+      description: Leaf node representing a single capacitor
+      required:
+        - type
+        - capacitor_index
+        - value
+      properties:
+        type:
+          type: string
+          enum: [Leaf]
+        capacitor_index:
+          type: integer
+          minimum: 0
+        value:
+          type: number
+          format: double
+          exclusiveMinimum: 0
+
+    Series:
+      type: object
+      description: Series connection of two SP networks
+      required:
+        - type
+        - left
+        - right
+      properties:
+        type:
+          type: string
+          enum: [Series]
+        left:
+          $ref: '#/components/schemas/SPNode'
+        right:
+          $ref: '#/components/schemas/SPNode'
+
+    Parallel:
+      type: object
+      description: Parallel connection of two SP networks
+      required:
+        - type
+        - left
+        - right
+      properties:
+        type:
+          type: string
+          enum: [Parallel]
+        left:
+          $ref: '#/components/schemas/SPNode'
+        right:
+          $ref: '#/components/schemas/SPNode'
+
+    TestResult:
+      type: object
+      description: Outcome of a validation test
+      required:
+        - exercise_id
+        - test_type
+        - success
+        - expected_ceq_F
+      properties:
+        exercise_id:
+          type: string
+          example: "pdf2p_association_01"
+        test_type:
+          type: string
+          enum: [explicit_topology, exhaustive_search]
+        success:
+          type: boolean
+        observed_ceq_F:
+          type: number
+          format: double
+          nullable: true
+        expected_ceq_F:
+          type: number
+          format: double
+        relative_error:
+          type: number
+          format: double
+          nullable: true
+        failure_message:
+          type: string
+          nullable: true
+
+paths:
+  /test/validate-explicit-topology:
+    post:
+      summary: Validate equivalent capacitance for explicit topology
+      description: |
+        Tests that calculate_sp_ceq() produces correct results for known topology.
+        This is a conceptual test interface, not an actual HTTP endpoint.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - exercise
+                - explicit_topology
+              properties:
+                exercise:
+                  $ref: '#/components/schemas/ReferenceExercise'
+                explicit_topology:
+                  $ref: '#/components/schemas/ExplicitTopology'
+      responses:
+        '200':
+          description: Test result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestResult'
+
+  /test/validate-exhaustive-search:
+    post:
+      summary: Validate exhaustive search finds matching solution
+      description: |
+        Tests that find_best_sp_solutions() can find a topology matching expected Ceq.
+        This is a conceptual test interface, not an actual HTTP endpoint.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - exercise
+                - tolerance_level
+              properties:
+                exercise:
+                  $ref: '#/components/schemas/ReferenceExercise'
+                tolerance_level:
+                  type: number
+                  format: double
+                  description: Relative error tolerance (e.g., 1e-10 for EXACT)
+                  example: 1e-10
+      responses:
+        '200':
+          description: Test result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestResult'
+
+# Test Data Examples
+examples:
+  Exercise01:
+    summary: PDF Exercise 01
+    value:
+      id: "pdf2p_association_01"
+      title: "C1=15uF, C2=3uF, C3=6uF, C4=20uF; target Ceq≈5.96uF"
+      capacitors: [1.5e-05, 3e-06, 6e-06, 2e-05]
+      capacitor_labels: ["C1", "C2", "C3", "C4"]
+      expected_ceq_F: 5.964912280701754e-06
+      terminals:
+        pos: "a"
+        neg: "b"
+
+  Exercise02:
+    summary: PDF Exercise 02
+    value:
+      id: "pdf2p_association_02"
+      title: "C1=2uF, C2=8uF, C3=7uF, C4=4uF; target Ceq≈9.73uF"
+      capacitors: [2e-06, 8e-06, 7e-06, 4e-06]
+      capacitor_labels: ["C1", "C2", "C3", "C4"]
+      expected_ceq_F: 9.733333333333334e-06
+      terminals:
+        pos: "A"
+        neg: "B"
