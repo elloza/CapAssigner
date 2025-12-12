@@ -1,0 +1,480 @@
+# API Contracts: Lcapy Rendering Functions
+
+**Feature ID**: `006-lcapy-visualization`  
+**Contract Type**: Internal API Specifications  
+**Date**: 2025-12-12
+
+---
+
+## Contract 1: sp_to_lcapy_netlist
+
+### Function Signature
+
+```python
+def sp_to_lcapy_netlist(
+    node: SPNode,
+    capacitor_labels: List[str],
+    capacitor_values: List[float]
+) -> str:
+    """
+    Convert SPNode tree to lcapy netlist format.
+    
+    Args:
+        node: Root SPNode (Leaf, Series, or Parallel)
+        capacitor_labels: Labels for capacitors (e.g., ["C1", "C2", "C3"])
+        capacitor_values: Capacitance values in Farads
+        
+    Returns:
+        Netlist string in lcapy format
+        
+    Raises:
+        ValueError: If labels/values length doesn't match capacitor count
+        TypeError: If node is not a valid SPNode type
+    """
+```
+
+### Contract Specifications
+
+**Preconditions:**
+- `node` is a valid SPNode instance (Leaf, Series, or Parallel)
+- `len(capacitor_labels) == number of Leaf nodes in tree`
+- `len(capacitor_values) == number of Leaf nodes in tree`
+- All values in `capacitor_values` are positive floats
+- All labels in `capacitor_labels` are unique, non-empty strings
+
+**Postconditions:**
+- Returns non-empty string
+- String contains N lines where N = number of Leaf nodes
+- Each line format: `<label> <node1> <node2> <value><unit>`
+- Terminal A is always node 1
+- Terminal B is always node 0
+- Internal nodes numbered sequentially from 2
+
+**Behavior:**
+- **Leaf**: Single line connecting input to output node
+- **Series**: Left branch connects in → mid, right branch connects mid → out
+- **Parallel**: Both branches connect in → out
+
+### Test Cases
+
+```yaml
+test_single_capacitor:
+  input:
+    node: Leaf(0, 1e-05)
+    labels: ["C1"]
+    values: [1e-05]
+  expected: "C1 1 0 10uF"
+
+test_series_two_caps:
+  input:
+    node: Series(Leaf(0), Leaf(1))
+    labels: ["C1", "C2"]
+    values: [1e-05, 5e-06]
+  expected: |
+    C1 1 2 10uF
+    C2 2 0 5uF
+
+test_parallel_two_caps:
+  input:
+    node: Parallel(Leaf(0), Leaf(1))
+    labels: ["C1", "C2"]
+    values: [1e-05, 5e-06]
+  expected: |
+    C1 1 0 10uF
+    C2 1 0 5uF
+
+test_complex_topology:
+  input:
+    node: Series(Leaf(0), Parallel(Leaf(1), Leaf(2)))
+    labels: ["C1", "C2", "C3"]
+    values: [1e-05, 5e-06, 5e-06]
+  expected: |
+    C1 1 2 10uF
+    C2 2 0 5uF
+    C3 2 0 5uF
+```
+
+---
+
+## Contract 2: graph_to_lcapy_netlist
+
+### Function Signature
+
+```python
+def graph_to_lcapy_netlist(
+    topology: GraphTopology,
+    capacitor_labels: Optional[List[str]] = None
+) -> str:
+    """
+    Convert GraphTopology to lcapy netlist format.
+    
+    Args:
+        topology: GraphTopology with NetworkX graph, terminals, internal nodes
+        capacitor_labels: Optional custom labels (auto-generated if None)
+        
+    Returns:
+        Netlist string in lcapy format
+        
+    Raises:
+        ValueError: If graph is empty or disconnected
+        TypeError: If topology is not GraphTopology instance
+    """
+```
+
+### Contract Specifications
+
+**Preconditions:**
+- `topology.graph` is a NetworkX MultiGraph
+- `topology.terminal_a` and `topology.terminal_b` exist in graph
+- All edges have 'capacitance' attribute (float > 0)
+- Graph is connected between terminals
+- If `capacitor_labels` provided, length matches edge count
+
+**Postconditions:**
+- Returns non-empty string
+- String contains N lines where N = number of edges
+- Each line format: `<label> <node1> <node2> <value><unit>`
+- Terminal A mapped to node 1
+- Terminal B mapped to node 0
+- Internal nodes mapped to sequential numbers (2, 3, ...)
+- Parallel edges have unique labels (suffix with counter)
+
+**Behavior:**
+- Create node mapping: terminals → 1/0, internal → 2, 3, ...
+- Iterate all edges with keys (MultiGraph support)
+- Generate unique label for each edge
+- Format capacitance value with appropriate unit
+
+### Test Cases
+
+```yaml
+test_simple_graph:
+  input:
+    graph: 
+      nodes: [A, B]
+      edges: [(A, B, {capacitance: 1e-05})]
+    terminal_a: A
+    terminal_b: B
+    internal_nodes: []
+  expected: "CAB 1 0 10uF"
+
+test_graph_with_internal_node:
+  input:
+    graph:
+      nodes: [A, B, n1]
+      edges:
+        - (A, n1, {capacitance: 8e-06})
+        - (n1, B, {capacitance: 7e-06})
+    terminal_a: A
+    terminal_b: B
+    internal_nodes: [n1]
+  expected: |
+    CAn1 1 2 8uF
+    Cn1B 2 0 7uF
+
+test_multigraph_parallel_edges:
+  input:
+    graph:
+      nodes: [A, B]
+      edges:
+        - (A, B, {capacitance: 2e-06})
+        - (A, B, {capacitance: 4e-06})
+    terminal_a: A
+    terminal_b: B
+    internal_nodes: []
+  expected: |
+    CAB 1 0 2uF
+    CAB_1 1 0 4uF
+```
+
+---
+
+## Contract 3: render_sp_circuit_lcapy
+
+### Function Signature
+
+```python
+def render_sp_circuit_lcapy(
+    node: SPNode,
+    capacitor_labels: List[str],
+    capacitor_values: Optional[List[float]] = None
+) -> plt.Figure:
+    """
+    Render SP circuit diagram using lcapy.
+    
+    Args:
+        node: Root SPNode of topology
+        capacitor_labels: Labels for capacitors
+        capacitor_values: Optional capacitance values (for display)
+        
+    Returns:
+        Matplotlib Figure containing circuit diagram
+        
+    Raises:
+        ImportError: If lcapy not installed
+        ValueError: If netlist conversion fails
+    """
+```
+
+### Contract Specifications
+
+**Preconditions:**
+- `node` is valid SPNode
+- `capacitor_labels` list matches capacitor count
+- If `capacitor_values` provided, matches capacitor count
+- lcapy library available
+
+**Postconditions:**
+- Returns matplotlib Figure instance
+- Figure contains circuit diagram with all capacitors
+- Terminals A and B labeled
+- All connections properly formed
+- Rendering completes in < 2 seconds
+
+**Behavior:**
+1. Convert SPNode to netlist using `sp_to_lcapy_netlist()`
+2. Create lcapy Circuit from netlist
+3. Draw circuit with configuration:
+   - `draw_nodes='none'`
+   - `label_values=True`
+   - `style='american'`
+4. Return matplotlib Figure
+
+### Test Cases
+
+```yaml
+test_render_simple_series:
+  input:
+    node: Series(Leaf(0), Leaf(1))
+    labels: ["C1", "C2"]
+    values: [1e-05, 5e-06]
+  expected:
+    type: matplotlib.figure.Figure
+    has_axes: true
+    capacitor_count: 2
+
+test_render_with_fallback:
+  input:
+    node: Leaf(0)
+    labels: ["C1"]
+    values: [1e-05]
+    lcapy_available: false
+  expected:
+    type: matplotlib.figure.Figure
+    renderer: schemdraw  # Fallback
+```
+
+---
+
+## Contract 4: render_graph_network_lcapy
+
+### Function Signature
+
+```python
+def render_graph_network_lcapy(
+    topology: GraphTopology,
+    scale: float = 1.0,
+    font_size: int = 10
+) -> plt.Figure:
+    """
+    Render graph network diagram using lcapy.
+    
+    Args:
+        topology: GraphTopology with circuit structure
+        scale: Scaling factor for diagram
+        font_size: Font size for labels
+        
+    Returns:
+        Matplotlib Figure containing circuit diagram
+        
+    Raises:
+        ImportError: If lcapy not installed
+        ValueError: If graph is invalid or disconnected
+    """
+```
+
+### Contract Specifications
+
+**Preconditions:**
+- `topology` is valid GraphTopology
+- `topology.graph` is connected
+- All edges have 'capacitance' attribute
+- `scale > 0`
+- `font_size > 0`
+
+**Postconditions:**
+- Returns matplotlib Figure instance
+- Figure contains all capacitors from graph
+- Terminals and internal nodes labeled
+- Parallel edges (MultiGraph) properly displayed
+- Rendering completes in < 2 seconds
+
+**Behavior:**
+1. Convert GraphTopology to netlist using `graph_to_lcapy_netlist()`
+2. Create lcapy Circuit from netlist
+3. Draw circuit with scale and font_size
+4. Return matplotlib Figure
+
+### Test Cases
+
+```yaml
+test_render_simple_graph:
+  input:
+    topology:
+      nodes: [A, B]
+      edges: [(A, B, 1e-05)]
+    scale: 1.0
+    font_size: 10
+  expected:
+    type: matplotlib.figure.Figure
+    capacitor_count: 1
+
+test_render_complex_graph:
+  input:
+    topology:
+      nodes: [A, B, n1]
+      edges: [(A, n1, 8e-06), (n1, B, 7e-06), (A, B, 2e-06), (A, B, 4e-06)]
+    scale: 1.0
+    font_size: 10
+  expected:
+    type: matplotlib.figure.Figure
+    capacitor_count: 4
+    internal_node_count: 1
+```
+
+---
+
+## Contract 5: format_capacitance_for_netlist
+
+### Function Signature
+
+```python
+def format_capacitance_for_netlist(value_farads: float) -> str:
+    """
+    Format capacitance value for lcapy netlist.
+    
+    Args:
+        value_farads: Capacitance in Farads
+        
+    Returns:
+        Formatted string with value and unit (e.g., "10uF", "3.3nF")
+        
+    Raises:
+        ValueError: If value is not positive
+    """
+```
+
+### Contract Specifications
+
+**Preconditions:**
+- `value_farads > 0`
+
+**Postconditions:**
+- Returns non-empty string
+- String format: `<number><unit>` (no space)
+- Unit is one of: `F`, `mF`, `uF`, `nF`, `pF`
+- Number has at most 6 significant figures
+- Appropriate SI prefix chosen based on magnitude
+
+**Behavior:**
+- If value ≥ 1e-3: Use `mF`
+- If value ≥ 1e-6: Use `uF` (note: 'u' not 'µ')
+- If value ≥ 1e-9: Use `nF`
+- If value ≥ 1e-12: Use `pF`
+- Else: Use `F`
+
+### Test Cases
+
+```yaml
+test_microfarads:
+  input: 1.5e-05
+  expected: "15uF"
+
+test_nanofarads:
+  input: 5e-09
+  expected: "5nF"
+
+test_picofarads:
+  input: 3.3e-12
+  expected: "3.3pF"
+
+test_millifarads:
+  input: 0.002
+  expected: "2mF"
+
+test_farads:
+  input: 0.5
+  expected: "0.5F"
+
+test_very_small:
+  input: 1e-15
+  expected: "0.001pF"
+```
+
+---
+
+## Integration Contract
+
+### Overall Flow
+
+```
+User Request → pages.py
+    ↓
+render_sp_circuit() or render_graph_network()
+    ↓
+[Try lcapy first]
+    ↓
+sp_to_lcapy_netlist() or graph_to_lcapy_netlist()
+    ↓
+lcapy.Circuit(netlist)
+    ↓
+circuit.draw(**config)
+    ↓
+matplotlib.figure.Figure
+    ↓
+[On Error: Fallback to schemdraw/matplotlib]
+    ↓
+Display in Streamlit
+```
+
+### Error Handling Contract
+
+**All rendering functions must:**
+1. Try lcapy rendering first
+2. Catch all exceptions (ImportError, ValueError, RuntimeError)
+3. Log warning with exception details
+4. Fallback to existing rendering (schemdraw or matplotlib)
+5. Never raise exception to calling code
+6. Always return matplotlib Figure
+
+---
+
+## Performance Contract
+
+**All rendering functions must:**
+- Complete in < 2 seconds for circuits with ≤ 10 capacitors
+- Complete in < 5 seconds for circuits with ≤ 20 capacitors
+- Handle at least 50 capacitors without crashing
+- Use < 100MB memory per render
+
+---
+
+## Compatibility Contract
+
+**All functions must:**
+- Support Python 3.7+
+- Work with existing SPNode and GraphTopology structures
+- Not modify input data structures
+- Return matplotlib Figure compatible with Streamlit st.pyplot()
+- Gracefully handle missing lcapy dependency
+
+---
+
+## Testing Requirements
+
+Each contract must have:
+- ✅ Unit tests for all test cases above
+- ✅ Edge case tests (empty, single element, large)
+- ✅ Error handling tests (invalid input, exceptions)
+- ✅ Performance tests (< 2s requirement)
+- ✅ Integration tests with real circuits from test suite
