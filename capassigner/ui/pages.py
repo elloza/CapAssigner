@@ -274,7 +274,7 @@ def _render_theory_page() -> None:
     
     # Display comparison table
     df = pd.DataFrame(content['comparison_table'])
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width='stretch', hide_index=True)
     
     # Display recommendations
     st.subheader("Choosing the Right Method")
@@ -396,12 +396,12 @@ tolerance grade:
         # Add/Clear buttons (T092, T093)
         add_clear_cols = st.columns(2)
         with add_clear_cols[0]:
-            if st.button("➕ Add Row", key="add_row", use_container_width=True):
+            if st.button("➕ Add Row", key="add_row"):
                 st.session_state.capacitor_rows.append("")
                 st.session_state.capacitors_text = "\n".join(st.session_state.capacitor_rows)
                 _rerun()
         with add_clear_cols[1]:
-            if st.button("🗑️ Clear All", key="clear_all", use_container_width=True):
+            if st.button("🗑️ Clear All", key="clear_all"):
                 st.session_state.capacitor_rows = []
                 st.session_state.capacitors_text = ""
                 _rerun()
@@ -471,7 +471,7 @@ tolerance grade:
         )
 
         # Find Solutions button
-        find_button = st.button("🔍 Find Solutions", type="primary", use_container_width=True)
+        find_button = st.button("🔍 Find Solutions", type="primary")
 
     # Main content area
     if find_button:
@@ -532,9 +532,9 @@ tolerance grade:
 
             st.markdown("---")
             
-            # Create progress container in main area
-            progress_container = st.container()
-            with progress_container:
+            # Create progress container using st.empty() so it can be cleared
+            progress_placeholder = st.empty()
+            with progress_placeholder.container():
                 st.subheader("🔄 Computing...")
                 progress_bar = st.progress(0)
                 progress_text = st.empty()
@@ -594,8 +594,8 @@ tolerance grade:
                 st.session_state.last_target = target_value
                 st.session_state.last_n_caps = n_caps
 
-                # Clear progress container
-                progress_container.empty()
+                # Clear progress container completely
+                progress_placeholder.empty()
 
                 # Display success message with statistics
                 within_count = len([s for s in solutions if s.within_tolerance])
@@ -775,7 +775,7 @@ def _display_results(
     # Display table
     st.dataframe(
         df,
-        use_container_width=True,
+        width='stretch',
         hide_index=True
     )
 
