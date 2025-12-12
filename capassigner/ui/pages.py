@@ -39,6 +39,7 @@ from capassigner.config import (
     E96_SERIES,
 )
 from capassigner.core.sp_enumeration import find_best_sp_solutions
+from capassigner.core.sp_graph_exhaustive import solve as solve_sp_graph
 from capassigner.core.heuristics import heuristic_search
 from capassigner.core.metrics import ProgressUpdate, Solution
 from capassigner.core.parsing import parse_capacitance, format_capacitance
@@ -59,11 +60,13 @@ from capassigner.ui.tooltips import (
     TOOLTIP_CAP_TARGET,
     TOOLTIP_CAP_LIST,
     TOOLTIP_TOLERANCE,
-    TOOLTIP_METHOD_SP_EXHAUSTIVE,
-    TOOLTIP_METHOD_HEURISTIC,
+    TOOLTIP_METHOD_SELECTOR,
     TOOLTIP_HEURISTIC_ITERS,
     TOOLTIP_HEURISTIC_INTERNAL,
     TOOLTIP_SEED,
+    TOOLTIP_METHOD_SP_TREE,
+    TOOLTIP_METHOD_SP_GRAPH,
+    TOOLTIP_METHOD_HEURISTIC,
 )
 
 # E-Series descriptions for the UI
@@ -118,7 +121,7 @@ def _initialize_session_state() -> None:
     defaults = {
         'solutions': None,
         'computing': False,
-        'last_method': "SP Exhaustive",
+        'last_method': "SP Tree Exhaustive",
         'last_tolerance': DEFAULT_TOLERANCE,
         'capacitors_text': "1pF\n2pF\n5pF",
         'current_page': "🔬 Calculator",
@@ -415,10 +418,18 @@ tolerance grade:
         st.subheader("Method Selection")
         method = st.selectbox(
             "Synthesis Method",
-            ["SP Exhaustive", "Heuristic Graph Search"],
-            help=f"{TOOLTIP_METHOD_SP_EXHAUSTIVE}\n\n{TOOLTIP_METHOD_HEURISTIC}",
+            ["SP Tree Exhaustive", "SP Graph Exhaustive", "Heuristic Graph Search"],
+            help=TOOLTIP_METHOD_SELECTOR,
             key="method_select"
         )
+        
+        # Show method description
+        if method == "SP Tree Exhaustive":
+            st.caption(TOOLTIP_METHOD_SP_TREE)
+        elif method == "SP Graph Exhaustive":
+            st.caption(TOOLTIP_METHOD_SP_GRAPH)
+        else:
+            st.caption(TOOLTIP_METHOD_HEURISTIC)
 
         # Heuristic parameters (T067) - only show when Heuristic Graph Search selected
         if method == "Heuristic Graph Search":
@@ -492,7 +503,7 @@ tolerance grade:
             with stats_cols[0]:
                 st.metric("Capacitors", n_caps)
             with stats_cols[1]:
-                if method == "SP Exhaustive":
+                if method == "SP Tree Exhaustive":
                     # Calculate number of SP topologies: Catalan(n-1) * n!
                     from math import factorial
                     def catalan(n):
@@ -501,7 +512,9 @@ tolerance grade:
                         return factorial(2*n) // (factorial(n+1) * factorial(n))
                     
                     total_topologies = catalan(n_caps - 1) * factorial(n_caps) if n_caps > 0 else 0
-                    st.metric("Total SP Topologies", f"{total_topologies:,}")
+                    st.metric("Total SP Trees", f"{total_topologies:,}")
+                elif method == "SP Graph Exhaustive":
+                    st.metric("Method", "Graph Enumeration")
                 else:
                     st.metric("Iterations", f"{heuristic_iterations:,}")
             with stats_cols[2]:
@@ -523,10 +536,10 @@ tolerance grade:
                 )
 
             # Check for N > MAX_SP_EXHAUSTIVE_N warning (T031)
-            if method == "SP Exhaustive" and n_caps > MAX_SP_EXHAUSTIVE_N:
+            if "Exhaustive" in method and n_caps > MAX_SP_EXHAUSTIVE_N:
                 st.warning(
                     f"⚠️ You have {n_caps} capacitors. "
-                    f"SP Exhaustive may be slow for N > {MAX_SP_EXHAUSTIVE_N}. "
+                    f"{method} may be slow for N > {MAX_SP_EXHAUSTIVE_N}. "
                     f"Consider using Heuristic Graph Search for better performance."
                 )
 
@@ -565,7 +578,7 @@ tolerance grade:
 
             # Run computation (T068)
             try:
-                if method == "SP Exhaustive":
+                if method == "SP Tree Exhaustive":
                     # Get deduplicate setting from session state (default True)
                     deduplicate = st.session_state.get('deduplicate', True)
                     solutions = find_best_sp_solutions(
@@ -575,6 +588,13 @@ tolerance grade:
                         top_k=top_k,
                         progress_cb=on_progress,
                         deduplicate=deduplicate
+                    )
+                elif method == "SP Graph Exhaustive":
+                    solutions = solve_sp_graph(
+                        capacitors=capacitor_values,
+                        target=target_value,
+                        max_results=top_k,
+                        progress_callback=on_progress
                     )
                 else:  # Heuristic Graph Search
                     solutions = heuristic_search(
@@ -606,11 +626,23 @@ tolerance grade:
                         f"Try adding more capacitors or adjusting the target value."
                     )
                 elif within_count == 0:
-                    st.warning(
+                    best_err = solutions[0].relative_error
+                    msg = (
                         f"⚠️ Found {len(solutions)} solutions, but **none within ±{tolerance}% tolerance**. "
-                        f"Best solution has {solutions[0].relative_error:.2f}% error. "
-                        f"Consider increasing tolerance or adding more capacitors."
+                        f"Best solution has {best_err:.2f}% error. "
                     )
+                    
+                    # Suggest alternative methods (T013)
+                    if method == "SP Tree Exhaustive":
+                        if n_caps <= 6:
+                            msg += "\n\n💡 **Suggestion**: Try **SP Graph Exhaustive** to find bridge topologies."
+                        else:
+                            msg += "\n\n💡 **Suggestion**: Try **Heuristic Graph Search** to explore non-SP topologies."
+                    elif method == "SP Graph Exhaustive":
+                        msg += "\n\n💡 **Suggestion**: Try **Heuristic Graph Search** to explore non-SP topologies."
+                        
+                    msg += "\n\nConsider increasing tolerance or adding more capacitors."
+                    st.warning(msg)
                 else:
                     st.success(
                         f"✅ Found {len(solutions)} solutions using {method}! "
@@ -746,6 +778,21 @@ def _display_results(
             f"Disable the filter above to see all {len(solutions)} solutions."
         )
         return
+
+    # Suggestion logic for high error (T013)
+    if filtered_solutions and filtered_solutions[0].relative_error > 5.0:
+        best_err = filtered_solutions[0].relative_error
+        st.info(f"💡 **Suggestion**: The best solution has {best_err:.2f}% error.")
+        
+        if method == "SP Tree Exhaustive":
+            st.markdown("""
+            - Try **SP Graph Exhaustive** to find solutions with internal nodes (bridges).
+            - Try **Heuristic Graph Search** for more complex non-SP topologies.
+            """)
+        elif method == "SP Graph Exhaustive":
+             st.markdown("""
+            - Try **Heuristic Graph Search** to explore non-SP topologies.
+            """)
 
     # Show filter status (T085, T086)
     within_count = len([s for s in filtered_solutions if s.within_tolerance])

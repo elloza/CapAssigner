@@ -59,15 +59,26 @@ Quick approximations suitable for any number of capacitors.
 Limited to simple topologies.
 """
 
-TOOLTIP_METHOD_SP_EXHAUSTIVE = """
-**SP Exhaustive - Series-Parallel Enumeration**
+TOOLTIP_METHOD_SP_TREE = """
+**SP Tree Exhaustive - Series-Parallel Enumeration**
 
-Exhaustively enumerates ALL possible series-parallel topologies
-using the given capacitors.
+Exhaustively enumerates ALL possible series-parallel binary trees.
 
-- ✅ **Guaranteed optimal** within SP networks
+- ✅ **Guaranteed optimal** within SP tree space
 - ⚠️ **Slow for N > 8** (Catalan × N! complexity)
+- ⚠️ **Cannot find internal nodes** (pure series/parallel only)
 - 📐 Topologies: Binary trees with series/parallel operations
+"""
+
+TOOLTIP_METHOD_SP_GRAPH = """
+**SP Graph Exhaustive - Graph Enumeration**
+
+Enumerates all connected multigraphs and checks for SP-reducibility.
+
+- ✅ **Finds internal nodes** (bridges that reduce to SP)
+- ✅ **Solves Classroom Problem** (e.g., [3,2,3,1] -> 1)
+- ⚠️ **Very Slow for N > 6** (Super-exponential)
+- 📐 Topologies: General graphs that are SP-reducible
 """
 
 TOOLTIP_METHOD_HEURISTIC = """
@@ -165,6 +176,15 @@ TOOLTIP_RESULTS_REL_ERROR = """
 **Relative error = |C_eq - C_target| / C_target × 100%**
 
 Percentage deviation from target. Lower is better.
+"""
+
+
+TOOLTIP_METHOD_SELECTOR = """
+**Select the synthesis algorithm.**
+
+- **SP Tree Exhaustive**: Fast, exact for standard series-parallel circuits. Best for N <= 8.
+- **SP Graph Exhaustive**: Exact for all SP-reducible circuits, including those with internal nodes (bridges). Slower, best for N <= 6.
+- **Heuristic Graph Search**: Approximate, finds non-SP solutions (bridges). Best for N > 8 or complex targets.
 """
 
 

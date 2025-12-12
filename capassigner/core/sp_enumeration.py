@@ -12,6 +12,7 @@ Constitutional Compliance:
 from __future__ import annotations
 from typing import Optional, List, FrozenSet
 from functools import lru_cache
+from itertools import combinations
 import math
 
 from capassigner.core.sp_structures import (
@@ -135,34 +136,41 @@ def enumerate_sp_topologies(
 
         # Recursive case: partition into two non-empty subsets
         topologies = []
-        subset_list = list(subset)
+        
+        # Fix: Use proper set partitioning instead of linear slicing
+        # To avoid duplicates (A|B vs B|A), we fix one element (root) to always be in 'left'
+        items = sorted(list(subset))
+        root = items[0]
+        rest = items[1:]
+        
+        # Iterate through all possible sizes for the rest of the left set
+        for k in range(len(rest) + 1):
+            for comb in combinations(rest, k):
+                left_indices = frozenset((root,) + comb)
+                right_indices = subset - left_indices
+                
+                if not right_indices:
+                    continue
 
-        # Generate all non-empty partitions
-        # For efficiency, we only generate partitions where left <= right (lexicographically)
-        for i in range(1, len(subset_list)):
-            # Split at position i
-            left_indices = frozenset(subset_list[:i])
-            right_indices = frozenset(subset_list[i:])
+                # Recursively enumerate sub-topologies
+                left_topologies = _enumerate_recursive(left_indices)
+                right_topologies = _enumerate_recursive(right_indices)
 
-            # Recursively enumerate sub-topologies
-            left_topologies = _enumerate_recursive(left_indices)
-            right_topologies = _enumerate_recursive(right_indices)
+                # Combine with Series and Parallel
+                for left in left_topologies:
+                    for right in right_topologies:
+                        topologies.append(Series(left=left, right=right))
+                        topologies.append(Parallel(left=left, right=right))
 
-            # Combine with Series and Parallel
-            for left in left_topologies:
-                for right in right_topologies:
-                    topologies.append(Series(left=left, right=right))
-                    topologies.append(Parallel(left=left, right=right))
-
-                    # Progress callback
-                    current_count[0] += 2
-                    if progress_cb and current_count[0] % PROGRESS_UPDATE_FREQUENCY == 0:
-                        progress_cb(ProgressUpdate(
-                            current=current_count[0],
-                            total=estimated_total,
-                            message=f"Exploring topologies... {current_count[0]:,}",
-                            best_error=None
-                        ))
+                        # Progress callback
+                        current_count[0] += 2
+                        if progress_cb and current_count[0] % PROGRESS_UPDATE_FREQUENCY == 0:
+                            progress_cb(ProgressUpdate(
+                                current=current_count[0],
+                                total=estimated_total,
+                                message=f"Exploring topologies... {current_count[0]:,}",
+                                best_error=None
+                            ))
 
         cache[subset] = topologies
         return topologies

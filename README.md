@@ -9,7 +9,8 @@ CapAssigner is a web-based tool for designing capacitor networks that achieve a 
 ## Features
 
 - **🔬 Series-Parallel Synthesis**: Exhaustive enumeration of all SP topologies (optimal for N ≤ 8 capacitors)
-- **📊 Graph Network Search**: Heuristic exploration of non-SP topologies (bridges, meshes)
+- **�️ SP Graph Exhaustive**: Graph-based enumeration handling internal nodes (N ≤ 6)
+- **�📊 Graph Network Search**: Heuristic exploration of non-SP topologies (bridges, meshes)
 - **🧮 Laplacian Analysis**: Uses nodal admittance matrices for accurate C_eq calculation
 - **📈 Multiple Input Formats**: Accepts values with units (pF, nF, µF), scientific notation (1e-12), and decimals
 - **🎓 Educational Content**: Theory explanations with LaTeX formulas for each method
@@ -58,7 +59,8 @@ streamlit run app.py
 2. **Set Tolerance**: Define acceptable error percentage (default ±5%)
 3. **Add Capacitors**: Enter available capacitor values or load E-series presets
 4. **Select Method**:
-   - **SP Exhaustive**: For guaranteed optimal solutions with N ≤ 8 components
+   - **SP Tree Exhaustive**: For guaranteed optimal SP solutions (N ≤ 8)
+   - **SP Graph Exhaustive**: For explicit graph enumeration (N ≤ 6)
    - **Heuristic Graph Search**: For exploring non-SP topologies or larger inventories
 5. **Find Solutions**: Click to compute and rank solutions by error
 6. **View Results**: Examine circuit diagrams, errors, and tolerance status
@@ -120,6 +122,31 @@ Generates all possible binary trees combining capacitors with series and paralle
 - N ≤ 8 capacitors
 - Circuit is expected to be pure series-parallel (ladders, standard filters)
 - You need guaranteed optimality within SP space
+
+### SP Graph Exhaustive
+
+Enumerates all connected multigraphs with N edges and checks for SP-reducibility.
+
+**Method:**
+1. Generate all connected multigraphs with N edges
+2. Assign capacitors to edges
+3. Check if graph is SP-reducible using iterative reduction
+4. Calculate C_eq
+
+**✅ Strengths:**
+- Finds **all** SP-reducible topologies, including those with **internal nodes**
+- Solves the "Classroom Problem" (bridge-like structures that reduce to SP)
+- Guaranteed optimal for any SP-reducible circuit
+- Handles capacitor reuse (same value on multiple edges)
+
+**⚠️ Limitations:**
+- **Very slow** for N > 6 (super-exponential growth)
+- Only finds SP-reducible graphs (no non-SP bridges)
+
+**Use when:**
+- N ≤ 6 capacitors
+- You suspect the solution requires internal nodes (bridges)
+- SP Tree method fails to find an exact solution
 
 ### Laplacian Graph Method
 

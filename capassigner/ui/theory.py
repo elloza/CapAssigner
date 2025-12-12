@@ -66,6 +66,46 @@ The algorithm uses **memoization** to avoid recomputing equivalent subtrees.
     }
 
 
+def get_sp_graph_theory_content() -> Dict[str, Any]:
+    """Get theory content for SP Graph Exhaustive method."""
+    return {
+        "title": "SP Graph Exhaustive",
+        "explanation": """
+**SP Graph Exhaustive** extends the Series-Parallel concept to general graphs.
+Unlike the Tree method which builds circuits from the bottom up, this method:
+1. Enumerates all connected **multigraph topologies** with N edges.
+2. Assigns capacitors to edges.
+3. Checks if the resulting graph is **SP-reducible** using iterative reduction rules.
+
+This allows finding solutions that have **internal nodes** (bridge-like structures)
+which are still SP-reducible but cannot be represented as simple binary trees.
+
+**Example**: The "Classroom Problem"
+A circuit with 4 capacitors can form a structure with internal nodes C and D
+that reduces to a single equivalent capacitance, even if it's not a simple ladder.
+""",
+        "formulas": [
+            (r"V \in [2, N+1]", "Number of nodes ranges from 2 (all parallel) to N+1 (all series)"),
+            (r"C_{parallel} = \sum C_i", "Parallel reduction rule (edges between same nodes)"),
+            (r"C_{series} = (1/C_1 + 1/C_2)^{-1}", "Series reduction rule (degree-2 internal node)"),
+        ],
+        "when_to_use": """
+✅ Use SP Graph Exhaustive when:
+- You have **N ≤ 6** capacitors
+- You suspect the solution requires **internal nodes** (bridges)
+- SP Tree method fails to find an exact solution
+- You still want a guaranteed SP-reducible circuit
+""",
+        "complexity": """
+**Time Complexity**: High (Exponential)
+- Enumerates all multigraphs + all permutations of capacitors.
+- Much slower than SP Tree for N > 6.
+
+**Space Complexity**: O(N + E) for graph storage.
+"""
+    }
+
+
 def get_laplacian_theory_content() -> Dict[str, Any]:
     """Get theory content for Laplacian/graph-based analysis (T072).
 
@@ -288,11 +328,18 @@ def get_method_comparison_content() -> Dict[str, Any]:
         "title": "Method Comparison",
         "comparison_table": [
             {
-                "Method": "SP Exhaustive",
-                "Speed": "Slow for N>8",
-                "Topology Coverage": "SP only",
-                "Optimality": "Guaranteed",
-                "Best For": "Small N, exact solutions"
+                "Method": "SP Tree Exhaustive",
+                "Speed": "Fast (N≤8)",
+                "Topology Coverage": "SP Trees",
+                "Optimality": "Guaranteed (Tree)",
+                "Best For": "Standard SP circuits"
+            },
+            {
+                "Method": "SP Graph Exhaustive",
+                "Speed": "Slow (N≤6)",
+                "Topology Coverage": "SP Graphs (w/ bridges)",
+                "Optimality": "Guaranteed (SP)",
+                "Best For": "Complex SP circuits"
             },
             {
                 "Method": "Heuristic Graph",
@@ -307,17 +354,18 @@ def get_method_comparison_content() -> Dict[str, Any]:
 
 | Scenario | Recommended Method |
 |----------|-------------------|
-| N ≤ 6 capacitors | SP Exhaustive |
-| N = 7-8 capacitors | SP Exhaustive (may be slow) |
+| N ≤ 6 capacitors | SP Graph Exhaustive |
+| N = 7-8 capacitors | SP Tree Exhaustive |
 | N > 8 capacitors | Heuristic Graph Search |
-| Need bridges/meshes | Heuristic Graph Search |
-| Need guaranteed optimal | SP Exhaustive |
-| Time-constrained | Heuristic Graph Search |
+| Need bridges (SP-reducible) | SP Graph Exhaustive |
+| Need non-SP bridges | Heuristic Graph Search |
+| Need guaranteed optimal | SP Tree/Graph Exhaustive |
 """,
         "complexity_comparison": """
 | Method | Time | Space | Guarantee |
 |--------|------|-------|-----------|
-| SP Exhaustive | O(Cat(n)×n!) | O(n) | Optimal within SP |
+| SP Tree Exhaustive | O(Cat(n)×n!) | O(n) | Optimal within SP Tree |
+| SP Graph Exhaustive | O(Exp(n)) | O(n+e) | Optimal within SP Graph |
 | Heuristic Graph | O(iter×n³) | O(n²) | Best-effort |
 """
     }
@@ -330,6 +378,25 @@ def show_sp_theory() -> None:
     LaTeX formulas and explanations.
     """
     content = get_sp_theory_content()
+    
+    with st.expander(f"📚 {content['title']}", expanded=False):
+        st.markdown(content['explanation'])
+        
+        st.markdown("### Key Formulas")
+        for latex, description in content['formulas']:
+            st.latex(latex)
+            st.caption(description)
+        
+        st.markdown("### When to Use")
+        st.markdown(content['when_to_use'])
+        
+        st.markdown("### Complexity")
+        st.markdown(content['complexity'])
+
+
+def show_sp_graph_theory() -> None:
+    """Display theory section for SP Graph Exhaustive method."""
+    content = get_sp_graph_theory_content()
     
     with st.expander(f"📚 {content['title']}", expanded=False):
         st.markdown(content['explanation'])
@@ -741,6 +808,7 @@ def show_all_theory_sections() -> None:
     
     # Then show individual method theories
     show_sp_theory()
+    show_sp_graph_theory()
     show_graph_theory()
     show_heuristic_theory()
     show_enumeration_theory()
