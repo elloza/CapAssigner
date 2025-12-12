@@ -84,14 +84,24 @@ def render_sp_circuit(
             circuit = LcapyCircuit(netlist)
             
             # Draw with professional settings
-            fig = circuit.draw(
-                draw_nodes='none',       # Hide internal node markers
-                label_nodes=False,       # Don't label nodes
-                label_values=True,       # Show capacitance values
-                style='american',        # Use American circuit symbols
-                dpi=150                  # High resolution
+            # lcapy.draw() modifies the current matplotlib figure
+            circuit.draw(
+                draw_nodes='none',          # Hide internal node markers
+                label_nodes=False,          # Don't label nodes
+                label_values=True,          # Show capacitance values
+                style='american',           # Use American circuit symbols
+                scale=1.5,                  # Larger scale for better visibility
+                node_spacing=2.0,           # More space between nodes
+                cpt_size=1.5,               # Larger component size
+                dpi=150                     # High resolution
             )
             
+            # Get the current matplotlib figure and improve appearance
+            fig = plt.gcf()
+            fig.patch.set_facecolor('white')  # White background
+            for ax in fig.get_axes():
+                ax.set_aspect('equal')        # Equal aspect ratio
+            fig.tight_layout()                # Remove extra whitespace
             return fig
             
         except Exception as e:
@@ -568,15 +578,24 @@ def render_graph_network(
             circuit = LcapyCircuit(netlist)
             
             # Draw with configuration for graphs (show internal nodes)
-            fig = circuit.draw(
-                draw_nodes='connections',  # Show internal connection nodes
-                label_nodes=True,          # Label internal nodes
-                label_values=True,         # Show capacitance values
-                style='american',          # Use American circuit symbols
-                dpi=150,                   # High resolution
-                scale=scale                # Apply user scale
+            # lcapy.draw() modifies the current matplotlib figure
+            circuit.draw(
+                draw_nodes='connections',   # Show internal connection nodes
+                label_nodes=True,           # Label internal nodes
+                label_values=True,          # Show capacitance values
+                style='american',           # Use American circuit symbols
+                scale=max(1.5, scale),      # Minimum scale for visibility
+                node_spacing=2.0,           # More space between nodes
+                cpt_size=1.5,               # Larger component size
+                dpi=150                     # High resolution
             )
             
+            # Get the current matplotlib figure and improve appearance
+            fig = plt.gcf()
+            fig.patch.set_facecolor('white')  # White background
+            for ax in fig.get_axes():
+                ax.set_aspect('equal')        # Equal aspect ratio
+            fig.tight_layout()                # Remove extra whitespace
             return fig
             
         except Exception as e:
