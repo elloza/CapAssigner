@@ -84,10 +84,7 @@ def render_sp_circuit(
             circuit = LcapyCircuit(netlist)
             
             # Draw with professional settings
-            # lcapy.draw() modifies the current matplotlib figure
-            # Create figure with appropriate size and high DPI
-            fig = plt.figure(figsize=(12, 4), dpi=300)
-            
+            # lcapy.draw() creates and modifies the current matplotlib figure
             circuit.draw(
                 draw_nodes='none',          # Hide internal node markers
                 label_nodes=False,          # Don't label nodes
@@ -95,14 +92,17 @@ def render_sp_circuit(
                 style='american',           # Use American circuit symbols
                 scale=1.2,                  # Appropriate scale
                 node_spacing=2.0,           # More space between nodes
-                cpt_size=1.2                # Component size
+                cpt_size=1.2,               # Component size
+                dpi=300                     # High resolution
             )
             
-            # Improve appearance
-            fig.patch.set_facecolor('white')  # White background
+            # Get the figure lcapy created and improve appearance
+            fig = plt.gcf()
+            fig.set_size_inches(12, 4)            # Set appropriate size
+            fig.patch.set_facecolor('white')      # White background
             for ax in fig.get_axes():
-                ax.set_aspect('equal')        # Equal aspect ratio
-            fig.tight_layout(pad=0.5)         # Remove extra whitespace
+                ax.set_aspect('equal')            # Equal aspect ratio
+            fig.tight_layout(pad=0.5)             # Remove extra whitespace
             return fig
             
         except Exception as e:
@@ -579,10 +579,7 @@ def render_graph_network(
             circuit = LcapyCircuit(netlist)
             
             # Draw with configuration for graphs (show internal nodes)
-            # lcapy.draw() modifies the current matplotlib figure
-            # Create figure with appropriate size and high DPI
-            fig = plt.figure(figsize=(14, 6), dpi=300)
-            
+            # lcapy.draw() creates and modifies the current matplotlib figure
             circuit.draw(
                 draw_nodes='connections',   # Show internal connection nodes
                 label_nodes=True,           # Label internal nodes
@@ -590,14 +587,17 @@ def render_graph_network(
                 style='american',           # Use American circuit symbols
                 scale=max(1.2, scale),      # Minimum scale for visibility
                 node_spacing=2.0,           # More space between nodes
-                cpt_size=1.2                # Component size
+                cpt_size=1.2,               # Component size
+                dpi=300                     # High resolution
             )
             
-            # Improve appearance
-            fig.patch.set_facecolor('white')  # White background
+            # Get the figure lcapy created and improve appearance
+            fig = plt.gcf()
+            fig.set_size_inches(14, 6)            # Set appropriate size
+            fig.patch.set_facecolor('white')      # White background
             for ax in fig.get_axes():
-                ax.set_aspect('equal')        # Equal aspect ratio
-            fig.tight_layout(pad=0.5)         # Remove extra whitespace
+                ax.set_aspect('equal')            # Equal aspect ratio
+            fig.tight_layout(pad=0.5)             # Remove extra whitespace
             return fig
             
         except Exception as e:
