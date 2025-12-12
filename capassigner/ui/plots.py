@@ -90,19 +90,21 @@ def render_sp_circuit(
                 label_nodes=False,          # Don't label nodes
                 label_values=True,          # Show capacitance values
                 style='american',           # Use American circuit symbols
-                scale=1.2,                  # Appropriate scale
-                node_spacing=2.0,           # More space between nodes
+                scale=1.5,                  # Larger scale for more spacing
+                node_spacing=2.5,           # More space between nodes
                 cpt_size=1.2,               # Component size
+                font_size=9,                # Smaller font to prevent overlap
                 dpi=300                     # High resolution
             )
             
             # Get the figure lcapy created and improve appearance
             fig = plt.gcf()
-            fig.set_size_inches(12, 4)            # Set appropriate size
+            fig.set_size_inches(14, 5)            # Wider for more space
             fig.patch.set_facecolor('white')      # White background
             for ax in fig.get_axes():
                 ax.set_aspect('equal')            # Equal aspect ratio
-            fig.tight_layout(pad=0.5)             # Remove extra whitespace
+                ax.margins(0.1)                   # Add 10% margin around content
+            fig.tight_layout(pad=1.0)             # More padding
             return fig
             
         except Exception as e:
@@ -585,19 +587,21 @@ def render_graph_network(
                 label_nodes=True,           # Label internal nodes
                 label_values=True,          # Show capacitance values
                 style='american',           # Use American circuit symbols
-                scale=max(1.2, scale),      # Minimum scale for visibility
-                node_spacing=2.0,           # More space between nodes
+                scale=max(1.5, scale),      # Larger scale for more spacing
+                node_spacing=2.5,           # More space between nodes
                 cpt_size=1.2,               # Component size
+                font_size=9,                # Smaller font to prevent overlap
                 dpi=300                     # High resolution
             )
             
             # Get the figure lcapy created and improve appearance
             fig = plt.gcf()
-            fig.set_size_inches(14, 6)            # Set appropriate size
+            fig.set_size_inches(16, 7)            # Larger for more space
             fig.patch.set_facecolor('white')      # White background
             for ax in fig.get_axes():
                 ax.set_aspect('equal')            # Equal aspect ratio
-            fig.tight_layout(pad=0.5)             # Remove extra whitespace
+                ax.margins(0.1)                   # Add 10% margin around content
+            fig.tight_layout(pad=1.0)             # More padding
             return fig
             
         except Exception as e:
