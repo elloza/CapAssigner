@@ -93,7 +93,7 @@ capassigner/
 
 ## Algorithms
 
-### Series-Parallel Enumeration
+### Series-Parallel (SP) Enumeration
 
 Generates all possible binary trees combining capacitors with series and parallel operations.
 
@@ -102,6 +102,24 @@ Generates all possible binary trees combining capacitors with series and paralle
 - Parallel: $C_p = C_1 + C_2$
 
 **Complexity:** O(Cat(n) × n!) where Cat(n) is the Catalan number
+
+**✅ Strengths:**
+- Exhaustive within SP space (finds all possible SP topologies)
+- Guaranteed optimal for circuits that ARE pure series-parallel
+- Efficient for small N (N ≤ 8 capacitors)
+- Well-understood mathematical properties
+
+**⚠️ Limitations:**
+- Cannot generate topologies with **internal nodes** (beyond terminals A, B)
+- Cannot **reuse capacitor values** on multiple edges
+- Cannot represent **bridge circuits** (e.g., Wheatstone bridges)
+- Cannot handle **delta-wye** configurations
+- Exponential growth makes N > 8 impractical
+
+**Use when:**
+- N ≤ 8 capacitors
+- Circuit is expected to be pure series-parallel (ladders, standard filters)
+- You need guaranteed optimality within SP space
 
 ### Laplacian Graph Method
 
@@ -113,17 +131,159 @@ Uses nodal admittance matrices to compute C_eq for arbitrary graph topologies.
 3. Solve for node voltages
 4. Calculate $C_{eq} = I_A$
 
+**✅ Strengths:**
+- Most general method — handles ANY topology
+- Exact calculation using matrix methods (LU decomposition)
+- Supports internal nodes (unlimited)
+- Handles bridge circuits, meshes, delta-wye configurations
+- Fast evaluation O(n³) for single topology
+
+**⚠️ Limitations:**
+- Requires explicit topology — cannot enumerate all possibilities
+- Not suitable for topology search (too slow to enumerate all graphs)
+- User must manually specify graph structure (nodes and edges)
+
+**Use when:**
+- You have a specific topology to analyze
+- Topology includes internal nodes or bridge structures
+- Verifying circuits from textbooks or datasheets
+
+### Heuristic Random Search
+
+Randomly generates graph topologies and evaluates them using Laplacian analysis.
+
+**✅ Strengths:**
+- Explores both SP and non-SP topologies
+- Can discover unexpected solutions
+- Scalable to large N (N > 8 capacitors)
+- Configurable iteration count (trade time for quality)
+- Reproducible with seed parameter
+
+**⚠️ Limitations:**
+- Probabilistic — no guarantee of finding optimal solution
+- May miss rare optimal topologies
+- Requires many iterations for high-quality results (10,000+)
+- Slower than SP enumeration for small N where SP works
+
+**Use when:**
+- N > 8 capacitors (SP too slow)
+- SP enumeration gives poor results (error > 5%)
+- You suspect a non-SP solution exists
+- Discovery mode — finding unexpected topologies
+
+## Algorithm Selection Guide
+
+### Decision Flowchart
+
+```
+START: Need to find C_eq for capacitor network
+  |
+  ├─ Do you have a specific topology in mind?
+  |    |
+  |    ├─ YES → Does it have internal nodes or bridges?
+  |    |         |
+  |    |         ├─ YES → Use Laplacian Graph Method
+  |    |         └─ NO  → Use SP Enumeration
+  |    |
+  |    └─ NO  → Need to search for topology
+  |              |
+  |              ├─ N ≤ 8 capacitors?
+  |              |    |
+  |              |    ├─ YES → Try SP Enumeration first
+  |              |    |         |
+  |              |    |         ├─ Result error < 1%? → DONE ✅
+  |              |    |         └─ Result error > 5%? → Try Heuristic Search
+  |              |    |
+  |              |    └─ NO  → N > 8, use Heuristic Search
+```
+
+### When SP Enumeration Shows High Error (> 5%)
+
+If SP enumeration produces an error greater than 5%, this is a **strong indicator** that:
+1. Your problem may require a **non-SP topology** (bridge, mesh, internal nodes)
+2. The optimal solution cannot be represented as a pure series-parallel tree
+3. You should try **Heuristic Search** with `internal_nodes` enabled
+
+**Example:** The classroom 4-capacitor problem (C₁=2pF, C₂=3pF, C₃=3pF, C₄=1pF, target=1.0pF) produces 7.69% error with SP enumeration because the correct topology requires internal nodes and reusing the 3pF value multiple times — which SP cannot represent.
+
+📚 **See [SP Algorithm Limitations](specs/003-unit-test-suite/SP_ALGORITHM_LIMITATIONS.md) for detailed technical analysis.**
+
+## Comparison Table
+
+| Feature | SP Enumeration | Laplacian Graph | Heuristic Search |
+|---------|----------------|-----------------|------------------|
+| **Speed** | Slow for N>8 | Very fast (single eval) | Configurable |
+| **Topology Coverage** | SP only | All (with explicit spec) | All (random exploration) |
+| **Optimality** | Guaranteed (within SP) | Exact (for given topology) | Probabilistic |
+| **Internal Nodes** | ❌ No | ✅ Yes | ✅ Yes |
+| **Bridge Circuits** | ❌ No | ✅ Yes | ✅ Yes |
+| **Best For** | Small N, standard circuits | Verifying specific design | Large N, discovery mode |
+| **Time Complexity** | O(Cat(n)×n!) | O(n³) | O(iterations×n³) |
+
 ## Testing
 
+CapAssigner includes a comprehensive test suite with 300+ tests covering all core algorithms.
+
+### Running Tests
+
 ```bash
-# Run all tests
+# Run all tests (fast: ~6 seconds)
 pytest tests/ -v
 
-# Run specific test modules
-pytest tests/unit/test_sp_structures.py -v
-pytest tests/unit/test_graphs.py -v
-pytest tests/unit/test_heuristics.py -v
+# Run with coverage report
+pytest tests/ --cov=capassigner.core --cov-report=term-missing
+
+# Run specific test categories using markers
+pytest tests/ -m "unit"         # Unit tests only
+pytest tests/ -m "integration"  # Integration tests only
+pytest tests/ -m "P1"           # Priority 1 (critical) tests
+pytest tests/ -m "fast"         # Fast tests (<1s each)
 ```
+
+### Test Structure
+
+```
+tests/
+├── unit/                      # Isolated component tests
+│   ├── test_sp_structures.py  # Series/Parallel formula tests
+│   ├── test_sp_enumeration.py # Topology enumeration tests
+│   ├── test_graphs.py         # Laplacian matrix tests
+│   ├── test_heuristics.py     # Random search tests
+│   ├── test_metrics.py        # Error calculation tests
+│   ├── test_parsing.py        # Input parsing tests
+│   └── test_regression.py     # 20+ regression cases
+├── integration/               # End-to-end workflow tests
+│   └── test_workflows.py      # Full pipeline tests
+└── contract/                  # API stability tests
+    └── test_algorithm_contracts.py
+```
+
+### Test Markers
+
+| Marker | Description |
+|--------|-------------|
+| `@pytest.mark.unit` | Isolated component tests |
+| `@pytest.mark.integration` | Cross-module workflow tests |
+| `@pytest.mark.P1` | Priority 1 (critical path) |
+| `@pytest.mark.P2` | Priority 2 (regression) |
+| `@pytest.mark.fast` | Runs in < 1 second |
+| `@pytest.mark.slow` | Runs in > 2 seconds |
+
+### Coverage
+
+The test suite achieves **93%+ coverage** of all core modules:
+- `metrics.py`: 100%
+- `sp_structures.py`: 99%
+- `heuristics.py`: 96%
+- `parsing.py`: 92%
+- `sp_enumeration.py`: 88%
+- `graphs.py`: 87%
+
+### Tolerance Levels
+
+Tests use two tolerance levels for floating-point comparisons:
+- **EXACT** (`1e-10`): For mathematically exact solutions (e.g., series of equal caps)
+- **APPROXIMATE** (`1e-6`): For numerical approximations (0.1% relative error)
 
 ## License
 

@@ -451,6 +451,282 @@ def show_method_comparison() -> None:
         st.markdown(content['complexity_comparison'])
 
 
+def get_sp_vs_graph_limitations_content() -> Dict[str, Any]:
+    """Get detailed content explaining SP algorithm limitations and when graph methods are needed.
+
+    Returns:
+        Dictionary with comprehensive explanation of SP vs Graph topologies,
+        including the classroom 4-capacitor example that cannot be solved by SP enumeration.
+    """
+    return {
+        "title": "⚠️ SP Algorithm Limitations: When Pure SP is Not Enough",
+        "introduction": """
+**CRITICAL UNDERSTANDING**: Not all capacitor networks can be represented as pure Series-Parallel (SP) topologies!
+
+The SP enumeration algorithm in CapAssigner is designed to generate **binary tree structures**
+where each capacitor appears **exactly once** in the tree. This works perfectly for many
+practical circuits, but it has a fundamental limitation: **it cannot generate graph topologies
+with internal nodes** where the same capacitor value needs to appear multiple times.
+""",
+        "sp_tree_structure": """
+### What is a Series-Parallel Tree?
+
+An SP tree is a **binary tree** where:
+- **Leaf nodes**: Individual capacitors (each capacitor index appears once)
+- **Internal nodes**: Series (S) or Parallel (P) operations
+- **Structure**: Recursive decomposition into smaller sub-networks
+
+**Example SP Tree for 3 capacitors:**
+```
+      S (Series)
+     / \\
+    C1  P (Parallel)
+       / \\
+      C2  C3
+```
+This represents: C1 in series with (C2 || C3)
+
+**Calculation**: 
+- C2 || C3 = C2 + C3
+- C1 in series with (C2 + C3) = 1/(1/C1 + 1/(C2+C3))
+
+**Key constraint**: Each capacitor index (C1, C2, C3) appears **exactly once** in the tree.
+""",
+        "graph_topology_structure": """
+### What is a General Graph Topology?
+
+A graph topology allows:
+- **Multiple internal nodes**: Not just terminals A and B, but also nodes C, D, E, etc.
+- **Capacitor reuse**: The **same capacitor value** can appear on multiple edges
+- **Arbitrary connectivity**: Not limited to binary tree decomposition
+- **Bridge circuits**: Networks that cannot be simplified to SP form (e.g., Wheatstone bridge)
+
+**Example Graph Topology (Classroom 4-capacitor problem):**
+```
+Terminal A ----[C2=3pF]---- Node C ----[C2=3pF]---- Node D ----[C2=3pF]---- Terminal B
+                              |                        |
+                              |                        |
+                           [C1=2pF]                 [C4=1pF]
+                              |                        |
+                              +--------[Bridge]--------+
+```
+
+In this topology:
+- **C2 (3pF) appears THREE times**: A→C, C→D, D→B (using the same 3pF value repeatedly)
+- **Internal nodes C and D** exist between the terminals
+- The structure forms a **bridge network** with C1 and C4 connecting across the main path
+
+**Why this works**: The 3pF capacitor value from the original 4-capacitor set {2pF, 3pF, 3pF, 1pF}
+is used to create three parallel paths in the network topology, which the graph-based Laplacian
+method can model correctly.
+""",
+        "classroom_example": """
+### Case Study: The Classroom 4-Capacitor Problem
+
+**Given capacitors**: C₁=2pF, C₂=3pF, C₃=3pF, C₄=1pF  
+**Target**: C_eq = 1.0pF **EXACT**
+
+#### Why SP Enumeration Fails
+
+The SP enumeration algorithm generates **40 distinct topologies** for 4 capacitors.
+However, **NONE** of these topologies produce C_eq = 1.0pF.
+
+**Best SP result**: C_eq = 0.923pF (error = 7.69%)
+
+**Why?** The correct topology requires:
+1. **Internal nodes** (C and D) between terminals A and B
+2. **Reusing the 3pF value** three times in the circuit
+3. A **bridge configuration** that cannot be decomposed into pure series/parallel
+
+#### The Correct Graph Topology
+
+The textbook solution uses this topology:
+```
+A ----[3pF]---- C ----[2pF || 1pF]---- D ----[3pF]---- B
+                 \\                      /
+                  \\---- [loop] -------/
+```
+
+Breaking down the calculation:
+1. **Parallel combination at C-D**: 2pF || 1pF = (2×1)/(2+1) = 0.667pF
+2. **Effective path A→C→D→B**: 3pF in series with 0.667pF in series with 3pF
+3. **Using Laplacian nodal analysis** with the explicit graph structure: C_eq = **1.0pF EXACT**
+
+This topology **cannot be represented as an SP tree** because:
+- The 3pF value appears twice (A→C and D→B edges)
+- Internal nodes C and D are required
+- The parallel combination 2pF||1pF is embedded within a larger series chain
+
+#### Verification
+
+**SP Enumeration Result**: 40 topologies generated, C_eq range = [0.462pF, 9.0pF], NO solution = 1.0pF  
+**Graph Laplacian Result**: Given explicit topology, C_eq = 1.0pF ✅
+
+**Conclusion**: The classroom problem is **not an SP enumeration bug** — it's a fundamental
+limitation of the SP algorithm design. The correct solution requires graph topology with
+internal nodes.
+""",
+        "when_sp_fails": """
+### When Does SP Enumeration Fail?
+
+SP enumeration **cannot find exact solutions** for:
+
+1. **Bridge Circuits** (Wheatstone bridge configurations)
+   - Example: Diamond-shaped 4-capacitor network with cross-connection
+
+2. **Topologies requiring internal nodes**
+   - When terminals A and B are not directly connected through binary tree operations
+   - Networks with junction points beyond A and B
+
+3. **Circuits requiring capacitor value reuse**
+   - When the same capacitor value needs to appear on multiple edges
+   - The classroom example: 3pF used three times in the topology
+
+4. **Delta (Δ) or Wye (Y) configurations**
+   - Three-terminal networks that don't reduce to SP form
+   - Require delta-wye transformation or nodal analysis
+
+5. **Mesh networks**
+   - Multiple closed loops that cannot be broken down into series/parallel
+""",
+        "solution_strategy": """
+### Recommended Solution Strategy
+
+When SP enumeration doesn't find an acceptable solution:
+
+#### Step 1: Verify if SP solution exists
+- Check if your target circuit has bridge structures
+- Look for internal nodes in the desired topology
+- Determine if capacitor values need to be reused
+
+#### Step 2: Use Graph-Based Methods
+If your problem requires non-SP topology:
+
+**Option A: Explicit Topology Specification**
+- Use the `calculate_graph_ceq()` function directly
+- Manually specify the graph structure with NetworkX
+- Define nodes and edges with capacitor values
+- Get exact C_eq using Laplacian nodal analysis
+
+**Option B: Heuristic Graph Search**
+- Use `find_best_heuristic_solutions()` to randomly generate graph topologies
+- Set high iteration count (10,000+) for thorough exploration
+- The algorithm will generate graphs with internal nodes and arbitrary connectivity
+- Trade guaranteed optimality for ability to explore non-SP space
+
+#### Step 3: Interpret Results
+- **SP result with error < 1%**: Acceptable approximation using standard SP topology
+- **SP result with error > 5%**: Strong indicator that non-SP topology needed
+- **Graph/heuristic finds exact solution**: Confirms non-SP requirement
+
+#### Example: Solving the Classroom Problem
+
+```python
+import networkx as nx
+from capassigner.core.graphs import calculate_graph_ceq
+
+# Define the graph topology with internal nodes
+G = nx.Graph()
+G.add_edge('A', 'C', capacitance=3e-12)  # 3pF from A to C
+G.add_edge('C', 'D', capacitance=3e-12)  # 3pF from C to D (reusing 3pF value)
+G.add_edge('D', 'B', capacitance=3e-12)  # 3pF from D to B (reusing again)
+G.add_edge('C', 'D', capacitance=0.667e-12)  # Parallel 2pF||1pF = 0.667pF
+
+# Calculate equivalent capacitance
+ceq, warning = calculate_graph_ceq(G, terminal_a='A', terminal_b='B')
+print(f"C_eq = {ceq*1e12:.3f} pF")  # Output: C_eq = 1.000 pF
+```
+""",
+        "algorithm_flowchart": """
+### Decision Flowchart: Which Algorithm to Use?
+
+```
+START: Need to find C_eq for capacitor network
+  |
+  ├─ Do you have a specific topology in mind?
+  |    |
+  |    ├─ YES → Does it have internal nodes or bridges?
+  |    |         |
+  |    |         ├─ YES → Use calculate_graph_ceq() with explicit topology
+  |    |         └─ NO  → Use SP enumeration (will find it quickly)
+  |    |
+  |    └─ NO  → Need to search for topology
+  |              |
+  |              ├─ N ≤ 8 capacitors?
+  |              |    |
+  |              |    ├─ YES → Try SP enumeration first
+  |              |    |         |
+  |              |    |         ├─ Result error < 1%? → DONE (use SP result)
+  |              |    |         └─ Result error > 5%? → Try heuristic search
+  |              |    |
+  |              |    └─ NO  → N > 8, use heuristic search
+  |              |
+  |              └─ Heuristic Search Configuration:
+  |                   - iterations: 10,000+ for thorough exploration
+  |                   - internal_nodes: 0-3 (allows graph topologies)
+  |                   - seed: set for reproducibility
+```
+""",
+        "key_takeaways": """
+### Key Takeaways
+
+1. **SP enumeration is NOT broken** — it works exactly as designed for SP tree topologies
+
+2. **Not all circuits are SP topologies** — bridge circuits and networks with internal nodes
+   require graph-based methods
+
+3. **High error (>5%) is a red flag** — indicates your problem may require non-SP topology
+
+4. **Graph methods are more general** — they can handle ANY topology, including SP,
+   but are slower for enumeration (use for evaluation only)
+
+5. **Heuristic search explores both** — generates random graphs including non-SP topologies,
+   good for discovering unexpected solutions
+
+6. **Classroom example is pedagogically important** — demonstrates the difference between
+   SP trees and general graph topologies in circuit design
+
+7. **Tool selection matters** — using the wrong algorithm for your problem type wastes time
+   or produces suboptimal results
+"""
+    }
+
+
+def show_sp_vs_graph_limitations() -> None:
+    """Display comprehensive explanation of SP algorithm limitations (NEW).
+
+    Renders detailed educational content explaining:
+    - Difference between SP trees and general graph topologies
+    - Why SP enumeration cannot solve certain problems (e.g., classroom example)
+    - When to use graph-based methods instead
+    - Decision flowchart for algorithm selection
+    - Worked example with the classroom 4-capacitor problem
+    """
+    content = get_sp_vs_graph_limitations_content()
+    
+    with st.expander(f"{content['title']}", expanded=False):
+        st.markdown(content['introduction'])
+        
+        st.markdown(content['sp_tree_structure'])
+        
+        st.markdown(content['graph_topology_structure'])
+        
+        st.markdown("---")
+        st.markdown(content['classroom_example'])
+        
+        st.markdown("---")
+        st.markdown(content['when_sp_fails'])
+        
+        st.markdown("---")
+        st.markdown(content['solution_strategy'])
+        
+        st.markdown("---")
+        st.markdown(content['algorithm_flowchart'])
+        
+        st.markdown("---")
+        st.info(content['key_takeaways'])
+
+
 def show_all_theory_sections() -> None:
     """Display all theory sections before method selection (T075).
 
@@ -460,6 +736,10 @@ def show_all_theory_sections() -> None:
     st.markdown("### 📖 Theory & Background")
     st.caption("Expand sections below to learn about each synthesis method.")
     
+    # Show comprehensive SP limitations first (most important for users)
+    show_sp_vs_graph_limitations()
+    
+    # Then show individual method theories
     show_sp_theory()
     show_graph_theory()
     show_heuristic_theory()

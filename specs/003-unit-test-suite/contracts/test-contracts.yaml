@@ -1,0 +1,450 @@
+# Test Case Contract
+
+# This contract defines the structure and validation rules for test cases
+# in the comprehensive unit test suite.
+
+TestCase:
+  description: "A single test scenario with inputs, expected outputs, and metadata"
+  
+  properties:
+    name:
+      type: string
+      required: true
+      pattern: "^[a-z0-9_]+$"
+      description: "Unique identifier using snake_case"
+      examples:
+        - "classroom_4cap_exact"
+        - "series_equal_2cap"
+        - "edge_empty_list"
+    
+    description:
+      type: string
+      required: true
+      minLength: 10
+      description: "Human-readable explanation of what is being tested"
+    
+    capacitors:
+      type: array
+      items:
+        type: number
+        minimum: 0
+        exclusiveMinimum: true
+      required: true
+      minItems: 0  # Can be 0 for error handling tests
+      description: "Input capacitor values in Farads"
+      examples:
+        - [5e-12, 10e-12]
+        - [1e-12, 2e-12, 5e-12, 10e-12]
+    
+    target_ceq:
+      type: number
+      minimum: 0
+      exclusiveMinimum: true
+      required: false
+      description: "Target equivalent capacitance in Farads (optional for topology tests)"
+    
+    tolerance_pct:
+      type: number
+      minimum: 0
+      required: false
+      description: "Acceptable error percentage (omit for exact match tests)"
+      examples:
+        - 1.0  # 1%
+        - 5.0  # 5%
+    
+    expected_topology:
+      type: string
+      required: false
+      description: "Expected circuit expression string"
+      pattern: "^[C0-9+|()|\\s]+$"
+      examples:
+        - "C0+C1"  # Series
+        - "C0||C1"  # Parallel
+        - "((C0||C1)+C2)||C3"  # Mixed
+    
+    expected_ceq:
+      type: number
+      minimum: 0
+      exclusiveMinimum: true
+      required: false
+      description: "Expected calculated equivalent capacitance in Farads"
+    
+    expected_error_pct:
+      type: number
+      minimum: 0
+      required: false
+      description: "Expected error percentage for approximate solutions"
+    
+    source:
+      type: string
+      required: true
+      description: "Origin of test case for traceability"
+      examples:
+        - "classroom example"
+        - "hand-calculated"
+        - "mathematical proof"
+        - "Bug report PDF Dec 2025"
+    
+    priority:
+      type: string
+      required: true
+      enum: ["P1", "P2", "P3", "P4"]
+      description: "Test priority level"
+    
+    category:
+      type: string
+      required: true
+      enum: ["unit", "integration", "regression", "edge_case", "performance"]
+      description: "Test category for organization"
+
+  validation_rules:
+    - rule: "If capacitors is not empty, all values MUST be positive"
+      severity: error
+    
+    - rule: "expected_ceq MUST be positive if provided"
+      severity: error
+    
+    - rule: "tolerance_pct MUST be >= 0 if provided"
+      severity: error
+    
+    - rule: "name MUST be unique within test collection"
+      severity: error
+    
+    - rule: "If expected_error_pct is 0.0, tolerance_pct SHOULD be <= 1.0"
+      severity: warning
+    
+    - rule: "P1 priority cases MUST have source documentation"
+      severity: warning
+
+  examples:
+    - name: "classroom_4cap_exact"
+      description: "4-capacitor classroom example with known exact solution (bug case)"
+      capacitors: [1e-12, 2e-12, 5e-12, 10e-12]
+      target_ceq: 3.33e-12
+      tolerance_pct: 1.0
+      expected_topology: "TBD"  # To be determined from bug analysis
+      expected_ceq: 3.33e-12
+      expected_error_pct: 0.0
+      source: "Professor classroom Dec 2025 bug report"
+      priority: "P1"
+      category: "regression"
+    
+    - name: "series_equal_2cap"
+      description: "Two equal capacitors in series: C_eq = C/2"
+      capacitors: [10e-12, 10e-12]
+      expected_ceq: 5e-12
+      expected_topology: "C0+C1"
+      source: "hand-calculated"
+      priority: "P2"
+      category: "unit"
+    
+    - name: "edge_empty_list"
+      description: "Empty capacitor list should raise ValueError"
+      capacitors: []
+      source: "edge case specification"
+      priority: "P2"
+      category: "edge_case"
+
+---
+
+# Regression Suite Contract
+
+RegressionSuite:
+  description: "Collection of regression test cases with execution constraints"
+  
+  properties:
+    name:
+      type: string
+      required: true
+      description: "Suite identifier"
+    
+    test_cases:
+      type: array
+      items:
+        $ref: "#/TestCase"
+      required: true
+      minItems: 20  # Per clarification
+      description: "All test cases in this suite"
+    
+    min_count:
+      type: integer
+      required: true
+      minimum: 20
+      description: "Minimum required test cases (per clarification)"
+    
+    execution_time_budget_sec:
+      type: number
+      required: true
+      maximum: 20.0  # Per clarification (regression tests < 20s)
+      description: "Maximum allowed execution time in seconds"
+    
+    categories:
+      type: object
+      required: true
+      properties:
+        simple_2_3_cap:
+          type: array
+          minItems: 3
+          description: "Basic series/parallel with N=2-3"
+        medium_4_6_cap:
+          type: array
+          minItems: 8
+          description: "Diverse topologies including bug case"
+        complex_7_8_cap:
+          type: array
+          minItems: 4
+          description: "Ensure enumeration scales"
+        edge_cases:
+          type: array
+          minItems: 3
+          description: "Single capacitor, identical values, extreme ratios"
+        classroom_examples:
+          type: array
+          minItems: 2
+          description: "Professor-provided examples"
+
+  validation_rules:
+    - rule: "Total test cases across categories MUST equal test_cases length"
+      severity: error
+    
+    - rule: "At least one test case MUST have P1 priority"
+      severity: error
+    
+    - rule: "No duplicate test case names"
+      severity: error
+    
+    - rule: "Expected execution time SHOULD be under budget"
+      severity: warning
+
+---
+
+# Tolerance Level Contract
+
+ToleranceLevel:
+  description: "Defines acceptable error thresholds for different test types"
+  
+  properties:
+    name:
+      type: string
+      required: true
+      enum: ["exact", "approximate", "user"]
+    
+    relative_error_threshold:
+      type: number
+      required: true
+      minimum: 0
+      exclusiveMinimum: true
+      description: "Maximum relative error threshold"
+    
+    use_case:
+      type: string
+      required: true
+      description: "When to apply this tolerance"
+    
+    formula:
+      type: string
+      required: true
+      description: "How to calculate error for this level"
+
+  predefined_levels:
+    exact:
+      relative_error_threshold: 1e-10
+      use_case: "Exact mathematical solutions and known identities"
+      formula: "|actual - expected| / |expected| < 1e-10"
+    
+    approximate:
+      relative_error_threshold: 1e-6
+      use_case: "Heuristic algorithm outputs with expected variance"
+      formula: "|actual - expected| / |expected| < 1e-6"
+    
+    user:
+      relative_error_threshold: "variable (e.g., 0.05 for 5%)"
+      use_case: "User-facing tolerance checks"
+      formula: "|actual - expected| / |expected| < tolerance_pct / 100"
+
+---
+
+# Algorithm Component Contract
+
+AlgorithmComponent:
+  description: "Testable algorithmic unit within core modules"
+  
+  properties:
+    module_name:
+      type: string
+      required: true
+      enum: 
+        - "sp_structures"
+        - "sp_enumeration"
+        - "graphs"
+        - "heuristics"
+        - "metrics"
+        - "parsing"
+    
+    function_name:
+      type: string
+      required: true
+      description: "Function under test"
+    
+    input_schema:
+      type: object
+      required: true
+      description: "Expected input types and constraints"
+    
+    output_schema:
+      type: object
+      required: true
+      description: "Expected output types"
+    
+    complexity:
+      type: string
+      required: false
+      pattern: "^O\\([^)]+\\)$"
+      description: "Time complexity notation"
+      examples:
+        - "O(n)"
+        - "O(n²)"
+        - "O(2ⁿ)"
+    
+    dependencies:
+      type: array
+      items:
+        type: string
+      required: false
+      description: "Other components this depends on"
+    
+    pure_function:
+      type: boolean
+      required: true
+      description: "Whether function has no side effects"
+    
+    deterministic:
+      type: boolean
+      required: true
+      description: "Whether same inputs always produce same outputs"
+
+  validation_rules:
+    - rule: "MUST have corresponding test file in tests/unit/"
+      severity: error
+    
+    - rule: "MUST achieve 100% coverage per FR-003"
+      severity: error
+    
+    - rule: "Pure functions MUST NOT have side effects in tests"
+      severity: error
+    
+    - rule: "Deterministic functions MUST use fixed seeds for randomness"
+      severity: warning
+
+  examples:
+    - module_name: "sp_enumeration"
+      function_name: "enumerate_sp_topologies"
+      input_schema:
+        capacitors: {type: "List[float]", constraint: "non-empty, positive values"}
+        progress_callback: {type: "Optional[ProgressCallback]", constraint: "None allowed"}
+      output_schema:
+        type: "List[SPNode]"
+        constraint: "All topologies using input capacitors"
+      complexity: "O(Catalan(n)) - exponential in practice"
+      dependencies: ["sp_structures.SPNode"]
+      pure_function: true  # If progress_callback is None
+      deterministic: true
+    
+    - module_name: "graphs"
+      function_name: "calculate_graph_ceq"
+      input_schema:
+        graph: {type: "nx.Graph", constraint: "edges have 'capacitance' attribute"}
+        terminal_a: {type: "str", constraint: "node exists in graph"}
+        terminal_b: {type: "str", constraint: "node exists in graph"}
+      output_schema:
+        type: "float"
+        constraint: "C_eq >= 0 (0 if disconnected)"
+      complexity: "O(n³)"  # Matrix inversion
+      dependencies: ["numpy.linalg"]
+      pure_function: true
+      deterministic: true
+    
+    - module_name: "heuristics"
+      function_name: "generate_random_graph"
+      input_schema:
+        capacitors: {type: "List[float]", constraint: "non-empty"}
+        max_internal_nodes: {type: "int", constraint: ">= 0"}
+        seed: {type: "Optional[int]", constraint: "for reproducibility"}
+      output_schema:
+        type: "nx.Graph"
+      complexity: "O(n²)"
+      dependencies: ["networkx", "numpy.random"]
+      pure_function: true
+      deterministic: true  # If seed provided
+
+---
+
+# Test Metrics Contract
+
+TestMetrics:
+  description: "Tracks test execution metrics for test suite health monitoring"
+  
+  properties:
+    total_tests:
+      type: integer
+      required: true
+      minimum: 0
+    
+    passed:
+      type: integer
+      required: true
+      minimum: 0
+    
+    failed:
+      type: integer
+      required: true
+      minimum: 0
+    
+    skipped:
+      type: integer
+      required: true
+      minimum: 0
+    
+    execution_time_sec:
+      type: number
+      required: true
+      minimum: 0
+      description: "Total execution time in seconds"
+    
+    coverage_pct:
+      type: number
+      required: true
+      minimum: 0
+      maximum: 100
+      description: "Code coverage percentage"
+    
+    timestamp:
+      type: string
+      format: "date-time"
+      required: true
+
+  thresholds:
+    pass:
+      execution_time_sec: {maximum: 30.0}
+      coverage_pct: {minimum: 90.0}
+      pass_rate: {minimum: 0.95}  # passed / total_tests
+    
+    warning:
+      execution_time_sec: {maximum: 45.0}
+      coverage_pct: {minimum: 80.0}
+      pass_rate: {minimum: 0.90}
+    
+    fail:
+      execution_time_sec: {maximum: 999}  # Any time if other metrics fail
+      coverage_pct: {minimum: 0}
+      pass_rate: {minimum: 0}
+
+  validation_rules:
+    - rule: "passed + failed + skipped MUST equal total_tests"
+      severity: error
+    
+    - rule: "execution_time_sec SHOULD be < 30s for full suite"
+      severity: warning
+    
+    - rule: "coverage_pct TARGET is 100% for core algorithm modules"
+      severity: info

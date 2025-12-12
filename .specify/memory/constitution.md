@@ -85,7 +85,9 @@ Heuristic searches MUST be reproducible:
 
 ## Environment Setup
 
-Before running any Python commands, developers MUST activate the conda environment:
+**CRITICAL**: Before running ANY Python commands, tests, or the application, developers MUST ALWAYS activate the conda environment located in the repository root. Failure to activate the environment will cause import errors, version mismatches, and unpredictable behavior.
+
+### Required Environment Activation
 
 ```bash
 # Windows (cmd)
@@ -97,6 +99,13 @@ conda activate .\.conda
 # Unix/macOS
 conda activate ./.conda
 ```
+
+**This applies to ALL operations**:
+- Running the application (`streamlit run app.py`)
+- Executing tests (`pytest tests/`)
+- Installing packages (`pip install ...`)
+- Running scripts or utilities
+- Any Python command execution
 
 The environment is located at the repository root in `.conda/` directory. The `environment.yml` file defines all dependencies.
 

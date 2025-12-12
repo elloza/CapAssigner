@@ -21,7 +21,20 @@ markers = [
     "unit: Unit tests (fast, isolated)",
     "integration: Integration tests (slower, dependencies)",
     "contract: Contract tests (interface stability)",
+    "fast: Fast tests (< 100ms)",
+    "slow: Slow tests (> 2s, will be marked for selective execution)",
+    "P1: Priority 1 - Critical bug fixes",
+    "P2: Priority 2 - Important features",
+    "P3: Priority 3 - Nice to have",
+    "P4: Priority 4 - Future enhancements",
 ]
+# Execution time warning threshold (30-second budget per SC-003)
+filerwarnings = [
+    "error",
+    "ignore::DeprecationWarning",
+]
+# Set timeout for slow tests
+# timeout = 30
 
 [tool.mypy]
 python_version = "3.9"
