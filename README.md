@@ -24,6 +24,30 @@ CapAssigner is a web-based tool for designing capacitor networks that achieve a 
 - Python 3.7.4 or higher
 - Conda (recommended) or pip
 
+### Quick Install (All Platforms)
+
+**Linux/macOS:**
+```bash
+git clone https://github.com/yourusername/CapAssigner.git
+cd CapAssigner
+chmod +x install.sh
+./install.sh
+```
+
+**Windows:**
+```cmd
+git clone https://github.com/yourusername/CapAssigner.git
+cd CapAssigner
+install.bat
+```
+
+The install script will:
+1. Install Python dependencies from `requirements.txt`
+2. Check for LaTeX (pdflatex) and offer to install it
+3. Configure the environment
+
+**Note**: LaTeX is optional but recommended for professional circuit diagrams.
+
 ### Option 1: Conda (Recommended)
 
 ```bash
@@ -35,11 +59,14 @@ cd CapAssigner
 conda env create -f environment.yml
 conda activate capassigner
 
+# Install LaTeX (optional, for better circuit rendering)
+python install_latex.py
+
 # Run the application
 streamlit run app.py
 ```
 
-### Option 2: Pip
+### Option 2: Pip (Manual)
 
 ```bash
 # Clone the repository
@@ -49,9 +76,26 @@ cd CapAssigner
 # Install dependencies
 pip install -r requirements.txt
 
+# Install LaTeX (optional, for better circuit rendering)
+python install_latex.py
+
 # Run the application
 streamlit run app.py
 ```
+
+### About LaTeX (pdflatex)
+
+LaTeX is **optional** for CapAssigner:
+- **With LaTeX**: Circuit diagrams use lcapy for professional CircuiTikZ-quality rendering
+- **Without LaTeX**: Automatically falls back to matplotlib (still fully functional)
+
+The application will work perfectly without LaTeX, just with simpler circuit diagram styling.
+
+**Manual Installation:**
+- **Linux (Debian/Ubuntu)**: `sudo apt-get install texlive-latex-base texlive-latex-extra`
+- **Linux (RHEL/CentOS)**: `sudo yum install texlive-latex`
+- **macOS**: `brew install --cask basictex`
+- **Windows**: [Download MiKTeX](https://miktex.org/download) or `choco install miktex -y`
 
 ## Usage
 

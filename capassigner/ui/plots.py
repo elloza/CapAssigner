@@ -1,7 +1,8 @@
 """Visualization functions for network topologies.
 
-This module provides plotting functions using SchemDraw for series-parallel
-circuits and NetworkX for general graph topologies.
+This module provides plotting functions using lcapy for professional circuit diagrams,
+with fallback to SchemDraw for series-parallel circuits and NetworkX for general 
+graph topologies.
 
 Constitutional Compliance:
     - Principle II (UX First): Clear visual circuit diagrams
@@ -9,11 +10,21 @@ Constitutional Compliance:
 """
 
 from __future__ import annotations
+import logging
 import matplotlib.pyplot as plt
 from typing import Any, Dict, List, Tuple, Optional
 
 import networkx as nx
 
+# Check for lcapy availability (professional circuit rendering)
+try:
+    from lcapy import Circuit as LcapyCircuit
+    LCAPY_AVAILABLE = True
+except ImportError:
+    LCAPY_AVAILABLE = False
+    LcapyCircuit = None
+
+# Check for schemdraw availability (fallback rendering)
 try:
     import schemdraw
     import schemdraw.elements as elm
@@ -23,6 +34,9 @@ except ImportError:
 
 from capassigner.core.sp_structures import Leaf, Series, Parallel, SPNode
 from capassigner.core.graphs import GraphTopology
+
+# Logger for rendering warnings and errors
+logger = logging.getLogger(__name__)
 
 # Color constants for better visibility
 LABEL_COLOR = '#CC0000'  # Red color for capacitor labels
@@ -34,7 +48,10 @@ def render_sp_circuit(
     capacitor_labels: List[str],
     capacitor_values: Optional[List[float]] = None
 ) -> plt.Figure:
-    """Render series-parallel network as circuit diagram using SchemDraw.
+    """Render series-parallel network as professional circuit diagram.
+
+    Uses lcapy for professional CircuiTikZ-quality diagrams. If lcapy is
+    unavailable or rendering fails, falls back to schemdraw.
 
     Creates a circuit diagram with labeled components and terminals A-B.
     Recursively traverses SP tree structure to build the circuit.
@@ -48,18 +65,43 @@ def render_sp_circuit(
         Matplotlib figure containing the circuit diagram.
 
     Raises:
-        ImportError: If SchemDraw is not installed.
+        ImportError: If neither lcapy nor SchemDraw is available.
         TypeError: If node is not a valid SPNode type.
 
     Examples:
         >>> leaf = Leaf(0, 5e-12)
         >>> fig = render_sp_circuit(leaf, ["C1"], [5e-12])
         >>> # Returns figure with A--[C1=5.0pF]--B
+        
+    Constitutional Compliance:
+        - Principle II (UX First): Professional circuit diagrams
+        - Principle IV (Modular Architecture): No Streamlit coupling
     """
+    # Try lcapy rendering first (professional quality)
+    if LCAPY_AVAILABLE and capacitor_values is not None:
+        try:
+            netlist = sp_to_lcapy_netlist(node, capacitor_labels, capacitor_values)
+            circuit = LcapyCircuit(netlist)
+            
+            # Draw with professional settings
+            fig = circuit.draw(
+                draw_nodes='none',       # Hide internal node markers
+                label_nodes=False,       # Don't label nodes
+                label_values=True,       # Show capacitance values
+                style='american',        # Use American circuit symbols
+                dpi=150                  # High resolution
+            )
+            
+            return fig
+            
+        except Exception as e:
+            logger.warning(f"Lcapy rendering failed: {e}, using schemdraw fallback")
+    
+    # Fallback to schemdraw rendering
     if not SCHEMDRAW_AVAILABLE:
         raise ImportError(
-            "SchemDraw is required for circuit rendering. "
-            "Install with: pip install schemdraw"
+            "Neither lcapy nor schemdraw available for circuit rendering. "
+            "Install with: pip install lcapy or pip install schemdraw"
         )
 
     # Create drawing with appropriate unit size
@@ -156,8 +198,9 @@ def _draw_sp_recursive(
 
     elif isinstance(node, Parallel):
         # Parallel: Split into branches, draw each, then join
-        # Save current position
+        # Save current position (start of parallel section)
         split_point = drawing.here
+        split_y = split_point[1]
 
         # Draw top branch (left subtree)
         drawing.push()  # Save state
@@ -166,28 +209,34 @@ def _draw_sp_recursive(
         drawing.pop()  # Restore state
 
         # Draw bottom branch (right subtree)
-        drawing += elm.Line().down(1.5)  # Move down to create more vertical separation
+        drawing += elm.Line().down(1.5)  # Move down to create vertical separation
         _draw_sp_recursive(drawing, node.right, capacitor_labels, capacitor_values)
         bottom_end = drawing.here
 
         # Join branches - move to end position
-        # Calculate the rightmost x-position
+        # Calculate the rightmost x-position (where branches should merge)
         end_x = max(top_end[0], bottom_end[0])
+        # Calculate midpoint y-coordinate for join
+        join_y = (top_end[1] + bottom_end[1]) / 2
 
         # Connect top branch to join point
         drawing.here = top_end
         if end_x > top_end[0]:
             drawing += elm.Line().right(end_x - top_end[0])
-        drawing += elm.Line().down(0.75)  # Move toward center
+        # Draw to join point (may need to go down)
+        if top_end[1] > join_y:
+            drawing += elm.Line().to((end_x, join_y))
 
         # Connect bottom branch to join point
         drawing.here = bottom_end
         if end_x > bottom_end[0]:
             drawing += elm.Line().right(end_x - bottom_end[0])
-        drawing += elm.Line().up(0.75)  # Move toward center
+        # Draw to join point (may need to go up)
+        if bottom_end[1] < join_y:
+            drawing += elm.Line().to((end_x, join_y))
 
-        # Set position to merged point
-        drawing.here = (end_x, (top_end[1] + bottom_end[1]) / 2)
+        # Set position to merged point for continuation
+        drawing.here = (end_x, join_y)
 
     else:
         raise TypeError(f"Unknown SPNode type: {type(node)}")
@@ -230,6 +279,231 @@ def _format_capacitance(value: float) -> str:
         return f"{value:.4g}F"
 
 
+def _format_capacitance_for_netlist(value_farads: float) -> str:
+    """Format capacitance value for lcapy netlist.
+    
+    Returns capacitance in scientific notation format that lcapy can parse.
+    Lcapy requires plain numeric values or scientific notation (e.g., "1.5e-5")
+    and does NOT accept SPICE suffix notation like "15uF" or "3.3nF".
+    
+    Args:
+        value_farads: Capacitance in Farads
+        
+    Returns:
+        Formatted string in scientific notation (e.g., "1.5e-5", "3.3e-9")
+        
+    Examples:
+        >>> _format_capacitance_for_netlist(1.5e-05)
+        '1.5e-05'
+        >>> _format_capacitance_for_netlist(3.3e-09)
+        '3.3e-09'
+        >>> _format_capacitance_for_netlist(4.7e-12)
+        '4.7e-12'
+    
+    Constitutional Compliance:
+        - Principle I (Scientific Accuracy): Uses standard scientific notation
+    """
+    # Return scientific notation format that lcapy accepts
+    # Use %.6g format to avoid unnecessary trailing zeros
+    return f"{value_farads:.6g}"
+
+
+def _sp_to_lcapy_netlist_recursive(
+    node: SPNode,
+    in_node: int,
+    out_node: int,
+    capacitors: List[float],
+    labels: List[str],
+    next_node_ref: List[int],
+    lines: List[str]
+) -> None:
+    """Recursively convert SPNode to netlist lines.
+    
+    Traverses SP tree structure and generates SPICE-format netlist lines.
+    Node numbering: Terminal A = 1, Terminal B = 0, internal nodes = 2, 3, ...
+    
+    Args:
+        node: Current SPNode (Leaf, Series, or Parallel)
+        in_node: Input node number
+        out_node: Output node number
+        capacitors: Capacitance values in Farads
+        labels: Capacitor labels (e.g., ["C1", "C2"])
+        next_node_ref: [next_available_node] (mutable counter)
+        lines: Accumulated netlist lines (mutable list)
+        
+    Constitutional Compliance:
+        - Principle VI (Algorithmic Correctness): Preserves circuit topology
+    """
+    if isinstance(node, Leaf):
+        # Base case: single capacitor
+        cap_val = capacitors[node.capacitor_index]
+        label = labels[node.capacitor_index]
+        val_str = _format_capacitance_for_netlist(cap_val)
+        lines.append(f"{label} {in_node} {out_node} {val_str}")
+        
+    elif isinstance(node, Series):
+        # Series: in -> left -> mid -> right -> out
+        mid_node = next_node_ref[0]
+        next_node_ref[0] += 1
+        
+        _sp_to_lcapy_netlist_recursive(node.left, in_node, mid_node,
+                                       capacitors, labels, next_node_ref, lines)
+        _sp_to_lcapy_netlist_recursive(node.right, mid_node, out_node,
+                                       capacitors, labels, next_node_ref, lines)
+        
+    elif isinstance(node, Parallel):
+        # Parallel: both connect in to out
+        _sp_to_lcapy_netlist_recursive(node.left, in_node, out_node,
+                                       capacitors, labels, next_node_ref, lines)
+        _sp_to_lcapy_netlist_recursive(node.right, in_node, out_node,
+                                       capacitors, labels, next_node_ref, lines)
+    else:
+        raise TypeError(f"Unknown SPNode type: {type(node)}")
+
+
+def sp_to_lcapy_netlist(
+    node: SPNode,
+    capacitor_labels: List[str],
+    capacitor_values: List[float]
+) -> str:
+    """Convert SPNode tree to lcapy netlist format.
+    
+    Generates SPICE-format netlist with proper node numbering convention:
+    - Terminal A = node 1
+    - Terminal B = node 0 (ground)
+    - Internal nodes = 2, 3, 4, ...
+    
+    Args:
+        node: Root SPNode
+        capacitor_labels: Labels for capacitors (e.g., ["C1", "C2"])
+        capacitor_values: Capacitance values in Farads
+        
+    Returns:
+        Multiline netlist string
+        
+    Examples:
+        >>> node = Series(Leaf(0, 1e-05), Leaf(1, 5e-06))
+        >>> netlist = sp_to_lcapy_netlist(node, ["C1", "C2"], [1e-05, 5e-06])
+        >>> print(netlist)
+        C1 1 2 10uF
+        C2 2 0 5uF
+        
+    Constitutional Compliance:
+        - Principle VI (Algorithmic Correctness): Accurate topology conversion
+    """
+    lines = []
+    next_node_ref = [2]  # Start internal nodes at 2
+    
+    # Terminal A = node 1, Terminal B = node 0
+    _sp_to_lcapy_netlist_recursive(node, 1, 0, capacitor_values, 
+                                   capacitor_labels, next_node_ref, lines)
+    
+    return "\n".join(lines)
+
+
+def graph_to_lcapy_netlist(
+    topology: GraphTopology,
+    capacitor_labels: Optional[List[str]] = None
+) -> str:
+    """Convert GraphTopology to lcapy netlist format.
+    
+    Generates SPICE-format netlist for general graph topologies, including
+    proper handling of parallel edges (MultiGraph).
+    
+    Node numbering convention:
+    - Terminal A = node 1
+    - Terminal B = node 0 (ground)
+    - Internal nodes = 2, 3, 4, ...
+    
+    Args:
+        topology: GraphTopology with NetworkX graph
+        capacitor_labels: Optional custom labels
+        
+    Returns:
+        Multiline netlist string
+        
+    Examples:
+        >>> G = nx.MultiGraph()
+        >>> G.add_edge('A', 'B', capacitance=1e-05)
+        >>> topology = GraphTopology(G, 'A', 'B', [])
+        >>> netlist = graph_to_lcapy_netlist(topology)
+        >>> print(netlist)
+        CAB 1 0 10uF
+        
+    Constitutional Compliance:
+        - Principle VI (Algorithmic Correctness): Preserves graph structure
+    """
+    graph = topology.graph
+    
+    # Create node mapping: A→1, B→0, internal→2+
+    node_map = {
+        topology.terminal_a: 1,
+        topology.terminal_b: 0
+    }
+    next_node = 2
+    for internal_node in topology.internal_nodes:
+        node_map[internal_node] = next_node
+        next_node += 1
+    
+    # Generate netlist lines
+    lines = []
+    edge_count = {}
+    
+    # Check if MultiGraph or regular Graph
+    is_multigraph = isinstance(graph, nx.MultiGraph)
+    
+    if is_multigraph:
+        # MultiGraph: iterate with keys to handle parallel edges
+        for u, v, key, data in graph.edges(keys=True, data=True):
+            cap = data.get('capacitance', 0)
+            cap_str = _format_capacitance_for_netlist(cap)
+            
+            # Generate unique label for edge (handle parallel edges)
+            pair = tuple(sorted([u, v]))
+            edge_num = edge_count.get(pair, 0)
+            edge_count[pair] = edge_num + 1
+            
+            # Create label: CAB, CAB_1, CAB_2, etc.
+            if edge_num == 0:
+                label = f"C{u}{v}"
+            else:
+                label = f"C{u}{v}_{edge_num}"
+            
+            # Clean label (remove special characters)
+            label = label.replace(" ", "").replace("-", "")
+            
+            node1 = node_map[u]
+            node2 = node_map[v]
+            
+            lines.append(f"{label} {node1} {node2} {cap_str}")
+    else:
+        # Regular Graph: no keys parameter
+        for u, v, data in graph.edges(data=True):
+            cap = data.get('capacitance', 0)
+            cap_str = _format_capacitance_for_netlist(cap)
+            
+            # Generate unique label for edge
+            pair = tuple(sorted([u, v]))
+            edge_num = edge_count.get(pair, 0)
+            edge_count[pair] = edge_num + 1
+            
+            # Create label: CAB, CAB_1, CAB_2, etc.
+            if edge_num == 0:
+                label = f"C{u}{v}"
+            else:
+                label = f"C{u}{v}_{edge_num}"
+            
+            # Clean label (remove special characters)
+            label = label.replace(" ", "").replace("-", "")
+            
+            node1 = node_map[u]
+            node2 = node_map[v]
+            
+            lines.append(f"{label} {node1} {node2} {cap_str}")
+    
+    return "\n".join(lines)
+
+
 def draw_graph(
     graph: Dict[str, Any],
     scale: float = 0.6,
@@ -260,10 +534,13 @@ def render_graph_network(
     scale: float = 1.0,
     font_size: int = 10
 ) -> plt.Figure:
-    """Render general graph network as a circuit schematic.
+    """Render general graph network as professional circuit schematic.
+
+    Uses lcapy for professional CircuiTikZ-quality diagrams. If lcapy is
+    unavailable or rendering fails, falls back to matplotlib rendering.
 
     Creates a circuit-style diagram with nodes as connection points and
-    capacitors as edges. Uses SchemDraw if available, falls back to matplotlib.
+    capacitors as edges.
 
     Args:
         topology: GraphTopology object with graph, terminals, and internal nodes.
@@ -279,7 +556,33 @@ def render_graph_network(
         >>> G.add_edge('n1', 'B', capacitance=10e-12)
         >>> topology = GraphTopology(G, 'A', 'B', ['n1'])
         >>> fig = render_graph_network(topology)
+        
+    Constitutional Compliance:
+        - Principle II (UX First): Clear graph visualization
+        - Principle IV (Modular Architecture): Pure rendering function
     """
+    # Try lcapy rendering first (professional quality)
+    if LCAPY_AVAILABLE:
+        try:
+            netlist = graph_to_lcapy_netlist(topology)
+            circuit = LcapyCircuit(netlist)
+            
+            # Draw with configuration for graphs (show internal nodes)
+            fig = circuit.draw(
+                draw_nodes='connections',  # Show internal connection nodes
+                label_nodes=True,          # Label internal nodes
+                label_values=True,         # Show capacitance values
+                style='american',          # Use American circuit symbols
+                dpi=150,                   # High resolution
+                scale=scale                # Apply user scale
+            )
+            
+            return fig
+            
+        except Exception as e:
+            logger.warning(f"Lcapy graph rendering failed: {e}, using matplotlib fallback")
+    
+    # Fallback to matplotlib rendering
     graph = topology.graph
 
     # Try to use SchemDraw for proper circuit rendering
@@ -404,15 +707,42 @@ def _render_graph_as_circuit_matplotlib(
         pos[node] = (0, y)
     
     # Draw edges as capacitor symbols
-    for u, v, data in graph.edges(data=True):
-        cap = data.get('capacitance', 0)
-        cap_label = _format_capacitance(cap)
-        
-        x1, y1 = pos[u]
-        x2, y2 = pos[v]
-        
-        # Draw wire segments with capacitor symbol in middle
-        _draw_capacitor_symbol(ax, x1, y1, x2, y2, cap_label, font_size)
+    # Handle both MultiGraph (with keys) and regular Graph (without keys)
+    edge_count = {}  # Track how many edges between each pair for offset
+    is_multigraph = isinstance(graph, nx.MultiGraph)
+    
+    if is_multigraph:
+        # MultiGraph: iterate with keys to get all parallel edges
+        for u, v, key, data in graph.edges(data=True, keys=True):
+            cap = data.get('capacitance', 0)
+            cap_label = _format_capacitance(cap)
+            
+            x1, y1 = pos[u]
+            x2, y2 = pos[v]
+            
+            # Calculate offset for parallel edges
+            pair = tuple(sorted([u, v]))
+            edge_num = edge_count.get(pair, 0)
+            edge_count[pair] = edge_num + 1
+            
+            # Draw wire segments with capacitor symbol in middle
+            _draw_capacitor_symbol(ax, x1, y1, x2, y2, cap_label, font_size, edge_num)
+    else:
+        # Regular Graph: no keys parameter
+        for u, v, data in graph.edges(data=True):
+            cap = data.get('capacitance', 0)
+            cap_label = _format_capacitance(cap)
+            
+            x1, y1 = pos[u]
+            x2, y2 = pos[v]
+            
+            # Calculate offset for parallel edges (shouldn't happen in regular Graph)
+            pair = tuple(sorted([u, v]))
+            edge_num = edge_count.get(pair, 0)
+            edge_count[pair] = edge_num + 1
+            
+            # Draw wire segments with capacitor symbol in middle
+            _draw_capacitor_symbol(ax, x1, y1, x2, y2, cap_label, font_size, edge_num)
     
     # Draw nodes as dots
     for node in graph.nodes():
@@ -471,13 +801,21 @@ def _draw_capacitor_symbol(
     x1: float, y1: float,
     x2: float, y2: float,
     label: str,
-    font_size: int = 10
+    font_size: int = 10,
+    edge_num: int = 0
 ) -> None:
     """Draw a capacitor symbol between two points.
     
     Draws connecting wires and a capacitor symbol (two parallel lines) in the middle.
+    For parallel edges (edge_num > 0), draws curved path.
+    
+    Args:
+        edge_num: Index for parallel edges (0 for first, 1 for second, etc.) to offset them
     """
     import numpy as np
+    from matplotlib.patches import FancyBboxPatch, Arc
+    from matplotlib.path import Path
+    import matplotlib.patches as mpatches
     
     # Calculate direction and perpendicular
     dx = x2 - x1
@@ -494,6 +832,50 @@ def _draw_capacitor_symbol(
     # Capacitor plate dimensions
     plate_width = 0.08  # Width of capacitor plate
     plate_gap = 0.06    # Gap between plates
+    
+    # For parallel edges, use curved path
+    if edge_num > 0:
+        # Calculate arc control point (offset perpendicular to edge)
+        curve_offset = 0.3 * edge_num  # How much to curve
+        mid_x = (x1 + x2) / 2
+        mid_y = (y1 + y2) / 2
+        ctrl_x = mid_x + px * curve_offset
+        ctrl_y = mid_y + py * curve_offset
+        
+        # Create curved path using quadratic Bezier
+        verts = [
+            (x1, y1),
+            (ctrl_x, ctrl_y),
+            (x2, y2)
+        ]
+        codes = [Path.MOVETO, Path.CURVE3, Path.CURVE3]
+        path = Path(verts, codes)
+        
+        # Draw curved wire
+        patch = mpatches.PathPatch(path, facecolor='none', edgecolor='#2C3E50', 
+                                   linewidth=2, zorder=1)
+        ax.add_patch(patch)
+        
+        # Draw capacitor symbol at curve midpoint
+        # Use control point as capacitor location
+        mx, my = ctrl_x, ctrl_y
+        
+        # Draw capacitor plates perpendicular to curve at midpoint
+        plate1_x = [mx - px * plate_width, mx + px * plate_width]
+        plate1_y = [my - py * plate_width, my + py * plate_width]
+        ax.plot(plate1_x, plate1_y, color='#2C3E50', linewidth=3, zorder=2)
+        
+        # Add label
+        label_offset = 0.15
+        label_x = mx + px * label_offset
+        label_y = my + py * label_offset
+        
+        ax.text(label_x, label_y, label, ha='center', va='center',
+                fontsize=font_size, fontweight='bold', color=LABEL_COLOR,
+                bbox=dict(boxstyle='round,pad=0.3', facecolor='white',
+                         edgecolor=LABEL_COLOR, alpha=0.95),
+                zorder=5)
+        return
     
     # Midpoint
     mx, my = (x1 + x2) / 2, (y1 + y2) / 2
