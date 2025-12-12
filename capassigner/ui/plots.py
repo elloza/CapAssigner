@@ -77,38 +77,21 @@ def render_sp_circuit(
         - Principle II (UX First): Professional circuit diagrams
         - Principle IV (Modular Architecture): No Streamlit coupling
     """
-    # Try lcapy rendering first (professional quality)
-    if LCAPY_AVAILABLE and capacitor_values is not None:
-        try:
-            netlist = sp_to_lcapy_netlist(node, capacitor_labels, capacitor_values)
-            circuit = LcapyCircuit(netlist)
-            
-            # Draw with professional settings
-            # lcapy.draw() creates and modifies the current matplotlib figure
-            circuit.draw(
-                draw_nodes='none',          # Hide internal node markers
-                label_nodes=False,          # Don't label nodes
-                label_values=True,          # Show capacitance values
-                style='american',           # Use American circuit symbols
-                scale=1.5,                  # Larger scale for more spacing
-                node_spacing=2.5,           # More space between nodes
-                cpt_size=1.2,               # Component size
-                font_size=9,                # Smaller font to prevent overlap
-                dpi=300                     # High resolution
-            )
-            
-            # Get the figure lcapy created and improve appearance
-            fig = plt.gcf()
-            fig.set_size_inches(14, 5)            # Wider for more space
-            fig.patch.set_facecolor('white')      # White background
-            for ax in fig.get_axes():
-                ax.set_aspect('equal')            # Equal aspect ratio
-                ax.margins(0.1)                   # Add 10% margin around content
-            fig.tight_layout(pad=1.0)             # More padding
-            return fig
-            
-        except Exception as e:
-            logger.warning(f"Lcapy rendering failed: {e}, using schemdraw fallback")
+    # Note: Lcapy disabled for SP circuits because it cannot properly render
+    # algorithmically-generated topologies without drawing hints in the netlist.
+    # Without these hints, lcapy misplaces parallel components and creates 
+    # incorrect circuit diagrams. SchemDraw provides accurate rendering for
+    # all SP topologies.
+    #
+    # Issue: lcapy warns "No schematic drawing hints provided!" and draws
+    # parallel capacitors incorrectly (series instead of parallel).
+    # 
+    # To re-enable lcapy, we would need to:
+    # 1. Add drawing direction hints (up/down/left/right) to netlist
+    # 2. Use semicolons and angle specifications in SPICE format
+    # 3. Handle complex topologies with manual positioning
+    #
+    # Current approach: Use SchemDraw which handles SP topologies correctly
     
     # Fallback to schemdraw rendering
     if not SCHEMDRAW_AVAILABLE:
@@ -574,38 +557,17 @@ def render_graph_network(
         - Principle II (UX First): Clear graph visualization
         - Principle IV (Modular Architecture): Pure rendering function
     """
-    # Try lcapy rendering first (professional quality)
-    if LCAPY_AVAILABLE:
-        try:
-            netlist = graph_to_lcapy_netlist(topology)
-            circuit = LcapyCircuit(netlist)
-            
-            # Draw with configuration for graphs (show internal nodes)
-            # lcapy.draw() creates and modifies the current matplotlib figure
-            circuit.draw(
-                draw_nodes='connections',   # Show internal connection nodes
-                label_nodes=True,           # Label internal nodes
-                label_values=True,          # Show capacitance values
-                style='american',           # Use American circuit symbols
-                scale=max(1.5, scale),      # Larger scale for more spacing
-                node_spacing=2.5,           # More space between nodes
-                cpt_size=1.2,               # Component size
-                font_size=9,                # Smaller font to prevent overlap
-                dpi=300                     # High resolution
-            )
-            
-            # Get the figure lcapy created and improve appearance
-            fig = plt.gcf()
-            fig.set_size_inches(16, 7)            # Larger for more space
-            fig.patch.set_facecolor('white')      # White background
-            for ax in fig.get_axes():
-                ax.set_aspect('equal')            # Equal aspect ratio
-                ax.margins(0.1)                   # Add 10% margin around content
-            fig.tight_layout(pad=1.0)             # More padding
-            return fig
-            
-        except Exception as e:
-            logger.warning(f"Lcapy graph rendering failed: {e}, using matplotlib fallback")
+    # Note: Lcapy disabled for graph topologies for the same reason as SP circuits.
+    # Lcapy requires manual drawing hints in the netlist to correctly position
+    # components, especially for complex graph topologies with parallel edges.
+    # 
+    # Without drawing hints, lcapy:
+    # - Warns "No schematic drawing hints provided!"
+    # - Incorrectly positions parallel capacitors
+    # - Creates confusing circuit diagrams
+    #
+    # The matplotlib/SchemDraw fallback provides accurate, clear visualizations
+    # for all graph topologies without requiring manual hint specification.
     
     # Fallback to matplotlib rendering
     graph = topology.graph
