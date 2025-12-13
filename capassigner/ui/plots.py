@@ -1,8 +1,7 @@
 """Visualization functions for network topologies.
 
-This module provides plotting functions using lcapy for professional circuit diagrams,
-with fallback to SchemDraw for series-parallel circuits and NetworkX for general 
-graph topologies.
+This module provides plotting functions using SchemDraw for professional circuit diagrams
+of series-parallel topologies, and matplotlib for general graph topologies.
 
 Constitutional Compliance:
     - Principle II (UX First): Clear visual circuit diagrams
@@ -50,8 +49,8 @@ def render_sp_circuit(
 ) -> plt.Figure:
     """Render series-parallel network as professional circuit diagram.
 
-    Uses lcapy for professional CircuiTikZ-quality diagrams. If lcapy is
-    unavailable or rendering fails, falls back to schemdraw.
+    Uses SchemDraw for professional circuit diagrams with automatic layout
+    that correctly handles all SP topologies including complex nested structures.
 
     Creates a circuit diagram with labeled components and terminals A-B.
     Recursively traverses SP tree structure to build the circuit.
@@ -77,27 +76,15 @@ def render_sp_circuit(
         - Principle II (UX First): Professional circuit diagrams
         - Principle IV (Modular Architecture): No Streamlit coupling
     """
-    # Note: Lcapy disabled for SP circuits because it cannot properly render
-    # algorithmically-generated topologies without drawing hints in the netlist.
-    # Without these hints, lcapy misplaces parallel components and creates 
-    # incorrect circuit diagrams. SchemDraw provides accurate rendering for
-    # all SP topologies.
-    #
-    # Issue: lcapy warns "No schematic drawing hints provided!" and draws
-    # parallel capacitors incorrectly (series instead of parallel).
-    # 
-    # To re-enable lcapy, we would need to:
-    # 1. Add drawing direction hints (up/down/left/right) to netlist
-    # 2. Use semicolons and angle specifications in SPICE format
-    # 3. Handle complex topologies with manual positioning
-    #
-    # Current approach: Use SchemDraw which handles SP topologies correctly
+    # Use SchemDraw for all SP circuit rendering
+    # Note: lcapy requires complex drawing hints and node topology that is
+    # difficult to generate algorithmically. SchemDraw handles all SP topologies
+    # automatically without hints.
     
-    # Fallback to schemdraw rendering
     if not SCHEMDRAW_AVAILABLE:
         raise ImportError(
-            "Neither lcapy nor schemdraw available for circuit rendering. "
-            "Install with: pip install lcapy or pip install schemdraw"
+            "SchemDraw is required for circuit rendering. "
+            "Install with: pip install schemdraw"
         )
 
     # Create drawing with appropriate unit size
@@ -311,12 +298,17 @@ def _sp_to_lcapy_netlist_recursive(
     capacitors: List[float],
     labels: List[str],
     next_node_ref: List[int],
-    lines: List[str]
+    lines: List[str],
+    direction: str = "right"
 ) -> None:
-    """Recursively convert SPNode to netlist lines.
+    """Recursively convert SPNode to netlist lines with drawing hints.
     
     Traverses SP tree structure and generates SPICE-format netlist lines.
     Node numbering: Terminal A = 1, Terminal B = 0, internal nodes = 2, 3, ...
+    
+    Drawing strategy:
+    - Series connections: place horizontally (right direction)
+    - Parallel branches: place first branch right, second branch down
     
     Args:
         node: Current SPNode (Leaf, Series, or Parallel)
@@ -326,6 +318,7 @@ def _sp_to_lcapy_netlist_recursive(
         labels: Capacitor labels (e.g., ["C1", "C2"])
         next_node_ref: [next_available_node] (mutable counter)
         lines: Accumulated netlist lines (mutable list)
+        direction: Drawing hint (right, down, left, up)
         
     Constitutional Compliance:
         - Principle VI (Algorithmic Correctness): Preserves circuit topology
@@ -335,24 +328,27 @@ def _sp_to_lcapy_netlist_recursive(
         cap_val = capacitors[node.capacitor_index]
         label = labels[node.capacitor_index]
         val_str = _format_capacitance_for_netlist(cap_val)
-        lines.append(f"{label} {in_node} {out_node} {val_str}")
+        # Add drawing hint for lcapy
+        lines.append(f"{label} {in_node} {out_node} {val_str}; {direction}")
         
     elif isinstance(node, Series):
         # Series: in -> left -> mid -> right -> out
+        # Both components go horizontally (right)
         mid_node = next_node_ref[0]
         next_node_ref[0] += 1
         
         _sp_to_lcapy_netlist_recursive(node.left, in_node, mid_node,
-                                       capacitors, labels, next_node_ref, lines)
+                                       capacitors, labels, next_node_ref, lines, "right")
         _sp_to_lcapy_netlist_recursive(node.right, mid_node, out_node,
-                                       capacitors, labels, next_node_ref, lines)
+                                       capacitors, labels, next_node_ref, lines, "right")
         
     elif isinstance(node, Parallel):
         # Parallel: both connect in to out
+        # First branch goes right, second goes down
         _sp_to_lcapy_netlist_recursive(node.left, in_node, out_node,
-                                       capacitors, labels, next_node_ref, lines)
+                                       capacitors, labels, next_node_ref, lines, "right")
         _sp_to_lcapy_netlist_recursive(node.right, in_node, out_node,
-                                       capacitors, labels, next_node_ref, lines)
+                                       capacitors, labels, next_node_ref, lines, "down")
     else:
         raise TypeError(f"Unknown SPNode type: {type(node)}")
 
@@ -362,12 +358,16 @@ def sp_to_lcapy_netlist(
     capacitor_labels: List[str],
     capacitor_values: List[float]
 ) -> str:
-    """Convert SPNode tree to lcapy netlist format.
+    """Convert SPNode tree to lcapy netlist format with drawing hints.
     
     Generates SPICE-format netlist with proper node numbering convention:
     - Terminal A = node 1
     - Terminal B = node 0 (ground)
     - Internal nodes = 2, 3, 4, ...
+    
+    Drawing hints are added to ensure lcapy draws the circuit correctly:
+    - Series components are placed horizontally (right)
+    - Parallel branches place first branch right, second down
     
     Args:
         node: Root SPNode
@@ -375,14 +375,14 @@ def sp_to_lcapy_netlist(
         capacitor_values: Capacitance values in Farads
         
     Returns:
-        Multiline netlist string
+        Multiline netlist string with drawing hints
         
     Examples:
         >>> node = Series(Leaf(0, 1e-05), Leaf(1, 5e-06))
         >>> netlist = sp_to_lcapy_netlist(node, ["C1", "C2"], [1e-05, 5e-06])
         >>> print(netlist)
-        C1 1 2 10uF
-        C2 2 0 5uF
+        C1 1 2 10uF; right
+        C2 2 0 5uF; right
         
     Constitutional Compliance:
         - Principle VI (Algorithmic Correctness): Accurate topology conversion
@@ -392,7 +392,7 @@ def sp_to_lcapy_netlist(
     
     # Terminal A = node 1, Terminal B = node 0
     _sp_to_lcapy_netlist_recursive(node, 1, 0, capacitor_values, 
-                                   capacitor_labels, next_node_ref, lines)
+                                   capacitor_labels, next_node_ref, lines, "right")
     
     return "\n".join(lines)
 
@@ -532,11 +532,9 @@ def render_graph_network(
 ) -> plt.Figure:
     """Render general graph network as professional circuit schematic.
 
-    Uses lcapy for professional CircuiTikZ-quality diagrams. If lcapy is
-    unavailable or rendering fails, falls back to matplotlib rendering.
-
-    Creates a circuit-style diagram with nodes as connection points and
-    capacitors as edges.
+    Uses matplotlib for network-style diagrams with nodes as connection points
+    and capacitors as edges. For complex graph topologies, matplotlib provides
+    clear visualization of all connections.
 
     Args:
         topology: GraphTopology object with graph, terminals, and internal nodes.
@@ -557,112 +555,12 @@ def render_graph_network(
         - Principle II (UX First): Clear graph visualization
         - Principle IV (Modular Architecture): Pure rendering function
     """
-    # Note: Lcapy disabled for graph topologies for the same reason as SP circuits.
-    # Lcapy requires manual drawing hints in the netlist to correctly position
-    # components, especially for complex graph topologies with parallel edges.
-    # 
-    # Without drawing hints, lcapy:
-    # - Warns "No schematic drawing hints provided!"
-    # - Incorrectly positions parallel capacitors
-    # - Creates confusing circuit diagrams
-    #
-    # The matplotlib/SchemDraw fallback provides accurate, clear visualizations
-    # for all graph topologies without requiring manual hint specification.
+    # Use matplotlib for graph topologies
+    # Note: SchemDraw is designed for linear SP circuits, not arbitrary graphs.
+    # Matplotlib provides better visualization for complex graph topologies
+    # with multiple parallel edges and arbitrary node connections.
     
-    # Fallback to matplotlib rendering
-    graph = topology.graph
-
-    # Try to use SchemDraw for proper circuit rendering
-    if SCHEMDRAW_AVAILABLE:
-        return _render_graph_as_circuit_schemdraw(topology, font_size)
-    else:
-        return _render_graph_as_circuit_matplotlib(topology, scale, font_size)
-
-
-def _render_graph_as_circuit_schemdraw(
-    topology: GraphTopology,
-    font_size: int = 10
-) -> plt.Figure:
-    """Render graph topology as circuit using SchemDraw.
-    
-    Uses a grid-based layout to position nodes and draw capacitors between them.
-    """
-    graph = topology.graph
-    
-    # Create drawing
-    drawing = schemdraw.Drawing()
-    
-    # Use hierarchical layout: A on left, B on right, internal nodes in middle
-    nodes = list(graph.nodes())
-    n_internal = len(topology.internal_nodes)
-    
-    # Position dictionary for nodes
-    node_positions = {}
-    
-    # Position terminals
-    node_positions[topology.terminal_a] = (0, 0)
-    node_positions[topology.terminal_b] = (6, 0)  # Right side
-    
-    # Position internal nodes in a grid between A and B
-    if n_internal > 0:
-        # Arrange internal nodes vertically centered
-        for i, node in enumerate(topology.internal_nodes):
-            x = 3  # Middle
-            y = (i - (n_internal - 1) / 2) * 1.5  # Spread vertically
-            node_positions[node] = (x, y)
-    
-    # Track which edges we've drawn
-    drawn_edges = set()
-    
-    # Draw terminal A
-    drawing += elm.Dot().at(node_positions[topology.terminal_a]).label(
-        topology.terminal_a, loc='left', color=TERMINAL_COLOR, fontsize=font_size + 2
-    )
-    
-    # Draw all edges as capacitors
-    edge_labels = []
-    for u, v, data in graph.edges(data=True):
-        edge_key = tuple(sorted([u, v]))
-        if edge_key in drawn_edges:
-            continue
-        drawn_edges.add(edge_key)
-        
-        cap = data.get('capacitance', 0)
-        cap_label = _format_capacitance(cap)
-        
-        pos_u = node_positions[u]
-        pos_v = node_positions[v]
-        
-        # Draw line from u to capacitor midpoint, then capacitor, then to v
-        mid_x = (pos_u[0] + pos_v[0]) / 2
-        mid_y = (pos_u[1] + pos_v[1]) / 2
-        
-        # Store edge info for labeling
-        edge_labels.append((mid_x, mid_y, cap_label, u, v))
-    
-    # Draw internal nodes
-    for node in topology.internal_nodes:
-        pos = node_positions[node]
-        drawing += elm.Dot().at(pos).label(
-            str(node), loc='top', color='#2C3E50', fontsize=font_size
-        )
-    
-    # Draw terminal B
-    drawing += elm.Dot().at(node_positions[topology.terminal_b]).label(
-        topology.terminal_b, loc='right', color=TERMINAL_COLOR, fontsize=font_size + 2
-    )
-    
-    # Get base figure from schemdraw
-    result = drawing.draw(show=False)
-    if hasattr(result, 'fig'):
-        base_fig = result.fig
-    elif isinstance(result, plt.Figure):
-        base_fig = result
-    else:
-        base_fig, _ = plt.subplots(figsize=(10, 6))
-    
-    # Now overlay with matplotlib for more control
-    return _render_graph_as_circuit_matplotlib(topology, 1.0, font_size)
+    return _render_graph_as_circuit_matplotlib(topology, scale, font_size)
 
 
 def _render_graph_as_circuit_matplotlib(
