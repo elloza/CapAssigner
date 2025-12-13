@@ -532,9 +532,9 @@ def render_graph_network(
 ) -> plt.Figure:
     """Render general graph network as professional circuit schematic.
 
-    Uses matplotlib for network-style diagrams with nodes as connection points
-    and capacitors as edges. For complex graph topologies, matplotlib provides
-    clear visualization of all connections.
+    Uses SchemDraw for professional circuit diagrams with proper capacitor symbols
+    and manual node positioning. Falls back to matplotlib if SchemDraw rendering
+    fails for complex topologies.
 
     Args:
         topology: GraphTopology object with graph, terminals, and internal nodes.
@@ -555,12 +555,125 @@ def render_graph_network(
         - Principle II (UX First): Clear graph visualization
         - Principle IV (Modular Architecture): Pure rendering function
     """
-    # Use matplotlib for graph topologies
-    # Note: SchemDraw is designed for linear SP circuits, not arbitrary graphs.
-    # Matplotlib provides better visualization for complex graph topologies
-    # with multiple parallel edges and arbitrary node connections.
+    # Try SchemDraw first for professional circuit symbols, fallback to matplotlib
+    if SCHEMDRAW_AVAILABLE:
+        try:
+            return _render_graph_as_circuit_schemdraw(topology, font_size)
+        except Exception as e:
+            # If SchemDraw fails (e.g., complex topology), use matplotlib
+            print(f"SchemDraw rendering failed: {e}. Using matplotlib fallback.")
     
     return _render_graph_as_circuit_matplotlib(topology, scale, font_size)
+
+
+def _render_graph_as_circuit_schemdraw(
+    topology: GraphTopology,
+    font_size: int = 10
+) -> plt.Figure:
+    """Render graph topology as circuit using SchemDraw with manual positioning.
+    
+    Creates professional circuit diagram with proper capacitor symbols.
+    Uses manual positioning to place nodes and draw capacitors between them.
+    
+    Args:
+        topology: GraphTopology with graph, terminals, and internal nodes
+        font_size: Font size for labels
+        
+    Returns:
+        Matplotlib figure with SchemDraw circuit
+    """
+    import schemdraw
+    import schemdraw.elements as elm
+    
+    graph = topology.graph
+    n_internal = len(topology.internal_nodes)
+    
+    # Create position dictionary for all nodes
+    pos = {}
+    
+    # Position terminals: A on left (0,0), B on right (6,0)
+    pos[topology.terminal_a] = (0, 0)
+    pos[topology.terminal_b] = (6, 0)
+    
+    # Position internal nodes in the middle, spread vertically
+    if n_internal > 0:
+        for i, node in enumerate(topology.internal_nodes):
+            x = 3  # Middle
+            y = (i - (n_internal - 1) / 2) * 2  # Spread vertically
+            pos[node] = (x, y)
+    
+    # Create drawing
+    drawing = schemdraw.Drawing(fontsize=font_size)
+    
+    # Draw all nodes as connection points (dots)
+    for node in graph.nodes():
+        x, y = pos[node]
+        
+        if node == topology.terminal_a:
+            drawing += elm.Dot().at((x, y)).label('A', loc='left', color=TERMINAL_COLOR, fontsize=font_size+2)
+        elif node == topology.terminal_b:
+            drawing += elm.Dot().at((x, y)).label('B', loc='right', color=TERMINAL_COLOR, fontsize=font_size+2)
+        else:
+            drawing += elm.Dot().at((x, y)).label(str(node), loc='top', fontsize=font_size)
+    
+    # Track edges to handle parallel edges with offsets
+    edge_count = {}
+    is_multigraph = isinstance(graph, nx.MultiGraph)
+    
+    # Draw capacitors between nodes
+    if is_multigraph:
+        for u, v, key, data in graph.edges(data=True, keys=True):
+            cap = data.get('capacitance', 0)
+            cap_label = _format_capacitance(cap)
+            
+            x1, y1 = pos[u]
+            x2, y2 = pos[v]
+            
+            # Calculate offset for parallel edges
+            pair = tuple(sorted([u, v]))
+            edge_num = edge_count.get(pair, 0)
+            edge_count[pair] = edge_num + 1
+            
+            # Apply offset perpendicular to edge direction
+            if edge_num > 0:
+                # Calculate perpendicular offset
+                dx = x2 - x1
+                dy = y2 - y1
+                length = (dx**2 + dy**2)**0.5
+                if length > 0:
+                    # Perpendicular unit vector
+                    px = -dy / length
+                    py = dx / length
+                    # Apply offset
+                    offset = 0.3 * edge_num
+                    x1 += px * offset
+                    y1 += py * offset
+                    x2 += px * offset
+                    y2 += py * offset
+            
+            # Draw capacitor from (x1,y1) to (x2,y2)
+            drawing += elm.Capacitor().at((x1, y1)).to((x2, y2)).label(cap_label, loc='top', fontsize=font_size-1)
+    else:
+        for u, v, data in graph.edges(data=True):
+            cap = data.get('capacitance', 0)
+            cap_label = _format_capacitance(cap)
+            
+            x1, y1 = pos[u]
+            x2, y2 = pos[v]
+            
+            # Draw capacitor from (x1,y1) to (x2,y2)
+            drawing += elm.Capacitor().at((x1, y1)).to((x2, y2)).label(cap_label, loc='top', fontsize=font_size-1)
+    
+    # Get the matplotlib figure
+    result = drawing.draw(show=False)
+    if hasattr(result, 'fig'):
+        return result.fig
+    elif isinstance(result, plt.Figure):
+        return result
+    else:
+        # Fallback if drawing returns something unexpected
+        fig, _ = plt.subplots(figsize=(10, 6))
+        return fig
 
 
 def _render_graph_as_circuit_matplotlib(
