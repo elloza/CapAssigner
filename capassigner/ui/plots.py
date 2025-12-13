@@ -573,7 +573,7 @@ def _render_graph_as_circuit_schemdraw(
     """Render graph topology as circuit using SchemDraw with manual positioning.
     
     Creates professional circuit diagram with proper capacitor symbols.
-    Uses manual positioning to place nodes and draw capacitors between them.
+    Uses NetworkX spring layout algorithm for optimal node positioning to avoid overlaps.
     
     Args:
         topology: GraphTopology with graph, terminals, and internal nodes
@@ -588,19 +588,30 @@ def _render_graph_as_circuit_schemdraw(
     graph = topology.graph
     n_internal = len(topology.internal_nodes)
     
-    # Create position dictionary for all nodes
-    pos = {}
-    
-    # Position terminals: A on left (0,0), B on right (6,0)
-    pos[topology.terminal_a] = (0, 0)
-    pos[topology.terminal_b] = (6, 0)
-    
-    # Position internal nodes in the middle, spread vertically
+    # Use NetworkX layout algorithm for better positioning
+    # Start with spring layout but fix terminal positions
     if n_internal > 0:
-        for i, node in enumerate(topology.internal_nodes):
-            x = 3  # Middle
-            y = (i - (n_internal - 1) / 2) * 2  # Spread vertically
-            pos[node] = (x, y)
+        # Use spring layout for internal nodes
+        pos_spring = nx.spring_layout(graph, k=2.0, iterations=50, seed=42)
+        
+        # Scale and adjust positions
+        pos = {}
+        for node in graph.nodes():
+            if node == topology.terminal_a:
+                pos[node] = (0, 0)  # Fix A on left
+            elif node == topology.terminal_b:
+                pos[node] = (6, 0)  # Fix B on right
+            else:
+                # Scale internal nodes to middle region
+                x_spring, y_spring = pos_spring[node]
+                # Map to range [1.5, 4.5] for x, [-2, 2] for y
+                pos[node] = (1.5 + (x_spring + 0.5) * 3, y_spring * 3)
+    else:
+        # Simple case: only terminals
+        pos = {
+            topology.terminal_a: (0, 0),
+            topology.terminal_b: (6, 0)
+        }
     
     # Create drawing
     drawing = schemdraw.Drawing(fontsize=font_size)
@@ -616,50 +627,60 @@ def _render_graph_as_circuit_schemdraw(
         else:
             drawing += elm.Dot().at((x, y)).label(str(node), loc='top', fontsize=font_size)
     
-    # Track edges to handle parallel edges with offsets
-    edge_count = {}
+    # Count parallel edges to calculate proper offsets
+    edge_connections = {}  # Track all edges between same node pairs
     is_multigraph = isinstance(graph, nx.MultiGraph)
     
-    # Draw capacitors between nodes
+    # First pass: count edges between each pair
     if is_multigraph:
         for u, v, key, data in graph.edges(data=True, keys=True):
+            pair = tuple(sorted([u, v]))
+            if pair not in edge_connections:
+                edge_connections[pair] = []
+            edge_connections[pair].append((u, v, key, data))
+    else:
+        for u, v, data in graph.edges(data=True):
+            pair = tuple(sorted([u, v]))
+            if pair not in edge_connections:
+                edge_connections[pair] = []
+            edge_connections[pair].append((u, v, None, data))
+    
+    # Second pass: draw capacitors with centered offsets for parallel edges
+    for pair, edges in edge_connections.items():
+        n_parallel = len(edges)
+        
+        for idx, edge_info in enumerate(edges):
+            if is_multigraph:
+                u, v, key, data = edge_info
+            else:
+                u, v, _, data = edge_info
+            
             cap = data.get('capacitance', 0)
             cap_label = _format_capacitance(cap)
             
             x1, y1 = pos[u]
             x2, y2 = pos[v]
             
-            # Calculate offset for parallel edges
-            pair = tuple(sorted([u, v]))
-            edge_num = edge_count.get(pair, 0)
-            edge_count[pair] = edge_num + 1
-            
-            # Apply offset perpendicular to edge direction
-            if edge_num > 0:
-                # Calculate perpendicular offset
+            # Calculate centered offset for parallel edges
+            if n_parallel > 1:
+                # Calculate perpendicular direction
                 dx = x2 - x1
                 dy = y2 - y1
                 length = (dx**2 + dy**2)**0.5
+                
                 if length > 0:
                     # Perpendicular unit vector
                     px = -dy / length
                     py = dx / length
-                    # Apply offset
-                    offset = 0.3 * edge_num
-                    x1 += px * offset
-                    y1 += py * offset
-                    x2 += px * offset
-                    y2 += py * offset
-            
-            # Draw capacitor from (x1,y1) to (x2,y2)
-            drawing += elm.Capacitor().at((x1, y1)).to((x2, y2)).label(cap_label, loc='top', fontsize=font_size-1)
-    else:
-        for u, v, data in graph.edges(data=True):
-            cap = data.get('capacitance', 0)
-            cap_label = _format_capacitance(cap)
-            
-            x1, y1 = pos[u]
-            x2, y2 = pos[v]
+                    
+                    # Center the offsets: offset range is [-(n-1)/2, ..., (n-1)/2] * spacing
+                    offset_spacing = 0.5  # Space between parallel edges
+                    offset_value = (idx - (n_parallel - 1) / 2) * offset_spacing
+                    
+                    x1 += px * offset_value
+                    y1 += py * offset_value
+                    x2 += px * offset_value
+                    y2 += py * offset_value
             
             # Draw capacitor from (x1,y1) to (x2,y2)
             drawing += elm.Capacitor().at((x1, y1)).to((x2, y2)).label(cap_label, loc='top', fontsize=font_size-1)
