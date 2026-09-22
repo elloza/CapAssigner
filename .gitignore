@@ -11,18 +11,16 @@ __pycache__/
 
 # IA
 .claude/
-.github/
 
 # Distribution / packaging
 .Python
 build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -130,3 +128,11 @@ Thumbs.db
 .idea/
 *.swp
 *.tmp
+
+# v2 web app
+node_modules/
+dist/
+/src/wasm/pkg/
+/crates/*/pkg/
+/test-results/
+/playwright-report/

@@ -1,0 +1,201 @@
+// Bilingual strings (Spanish by default) and the reactive language setting.
+
+export type Lang = 'es' | 'en';
+
+const es = {
+  appName: 'CapAssigner',
+  tagline: 'Síntesis de redes de condensadores con capacidad equivalente objetivo',
+  tabSolve: 'Resolver',
+  tabTheory: 'Teoría y métodos',
+  tabAbout: 'Acerca de',
+  mode: 'Problema',
+  modeAll: 'Usar todos los condensadores',
+  modeAllHint: 'Cada condensador de la lista se usa exactamente una vez (ejercicio clásico).',
+  modeInventory: 'Elegir de un inventario',
+  modeInventoryHint: 'Escoge las mejores combinaciones de hasta K piezas de una lista o serie E.',
+  target: 'Capacidad objetivo',
+  capacitors: 'Condensadores',
+  capacitorsHint: 'Separados por espacios, comas o saltos de línea. Ej.: 3pF 2pF 3pF 1pF · 4n7 · 2,2µF · 1e-11',
+  defaultUnit: 'Unidad si no se indica',
+  inventorySource: 'Inventario',
+  eSeries: 'Serie E',
+  customList: 'Lista propia',
+  decades: 'Décadas',
+  from: 'desde',
+  to: 'hasta',
+  stock: 'Existencias limitadas',
+  stockHint: 'Formato «valor×cantidad», p. ej. 10pF×2 4.7pF×3. Sin «×» = ilimitado.',
+  maxParts: 'Máximo de piezas',
+  minParts: 'Mínimo de piezas',
+  topology: 'Topologías',
+  topoSP: 'Serie-paralelo',
+  topoBridge: 'Serie-paralelo + puentes',
+  topoAll: 'Todas las redes',
+  topoHint: '«Todas» incluye cualquier red de dos terminales (núcleos 3-conexos), hasta 9 piezas.',
+  topoDisabled: 'Con más de 9 piezas solo se exploran redes serie-paralelo.',
+  tolerance: 'Error aceptable',
+  partTolerance: 'Tolerancia de fabricación',
+  results: 'Resultados a mostrar',
+  solve: 'Buscar redes',
+  cancel: 'Cancelar',
+  examples: 'Ejemplos',
+  computing: 'Calculando…',
+  progress: 'Construyendo conjuntos de valores',
+  cancelled: 'Búsqueda cancelada.',
+  noResults: 'Introduce los datos y pulsa «Buscar redes».',
+  errorsIn: 'No se entiende',
+  exhaustive: 'Búsqueda exhaustiva',
+  exhaustiveHint: 'Se han considerado todas las redes posibles: no existe ninguna mejor.',
+  approximate: 'Búsqueda aproximada con garantía',
+  approximateHint: 'Ningún circuito puede mejorar el error mostrado en más de',
+  stats: (states: number, entries: number, ms: number) =>
+    `${states.toLocaleString('es')} estados · ${entries.toLocaleString('es')} valores · ${ms < 1000 ? `${ms.toFixed(0)} ms` : `${(ms / 1000).toFixed(2)} s`}`,
+  colRank: '#',
+  colCeq: 'C equivalente',
+  colError: 'Error',
+  colParts: 'Piezas',
+  colNetwork: 'Red',
+  within: 'dentro',
+  outside: 'fuera',
+  detail: 'Detalle',
+  diagram: 'Esquema',
+  verification: 'Verificación independiente',
+  verifiedOk: 'Verificado: análisis nodal, balance de energía y conservación de carga coinciden.',
+  verifiedBad: 'La verificación ha fallado',
+  exactValue: 'Valor exacto',
+  exactError: 'Error exacto',
+  exactZero: '0 (solución exacta)',
+  interval: 'Intervalo con tolerancias',
+  intervalHint: (t: string) => `Si cada pieza varía ±${t}, C_eq queda en este intervalo (la red es monótona y homogénea).`,
+  parts: 'Piezas y reparto',
+  colPart: 'Pieza',
+  colValue: 'Valor',
+  colVoltage: 'Tensión',
+  colCharge: 'Carga',
+  colEnergy: 'Energía',
+  partsHint: 'Para 1 V entre A y B. La tensión relativa al cuadrado es también la sensibilidad ∂C_eq/∂C_i.',
+  export: 'Exportar',
+  copy: 'Copiar',
+  copied: 'Copiado',
+  download: 'Descargar',
+  share: 'Enlace para compartir',
+  language: 'Idioma',
+  theme: 'Tema',
+  subnetwork: 'Subred',
+  bridge: 'Puente',
+  close: 'Cerrar',
+  offline: 'Todo se calcula en tu navegador (Rust → WebAssembly). No se envía ningún dato.',
+};
+
+export type Strings = typeof es;
+
+const en: Strings = {
+  appName: 'CapAssigner',
+  tagline: 'Synthesis of capacitor networks with a target equivalent capacitance',
+  tabSolve: 'Solve',
+  tabTheory: 'Theory & methods',
+  tabAbout: 'About',
+  mode: 'Problem',
+  modeAll: 'Use every capacitor',
+  modeAllHint: 'Each capacitor in the list is used exactly once (classic exercise).',
+  modeInventory: 'Pick from an inventory',
+  modeInventoryHint: 'Finds the best combinations of up to K parts from a list or an E-series.',
+  target: 'Target capacitance',
+  capacitors: 'Capacitors',
+  capacitorsHint: 'Separated by spaces, commas or new lines. E.g. 3pF 2pF 3pF 1pF · 4n7 · 2.2µF · 1e-11',
+  defaultUnit: 'Unit when omitted',
+  inventorySource: 'Inventory',
+  eSeries: 'E-series',
+  customList: 'Custom list',
+  decades: 'Decades',
+  from: 'from',
+  to: 'to',
+  stock: 'Limited stock',
+  stockHint: 'Write "value×count", e.g. 10pF×2 4.7pF×3. No "×" = unlimited.',
+  maxParts: 'Maximum parts',
+  minParts: 'Minimum parts',
+  topology: 'Topologies',
+  topoSP: 'Series-parallel',
+  topoBridge: 'Series-parallel + bridges',
+  topoAll: 'All networks',
+  topoHint: '"All" includes any two-terminal network (3-connected cores), up to 9 parts.',
+  topoDisabled: 'With more than 9 parts only series-parallel networks are explored.',
+  tolerance: 'Acceptable error',
+  partTolerance: 'Part tolerance',
+  results: 'Results to show',
+  solve: 'Find networks',
+  cancel: 'Cancel',
+  examples: 'Examples',
+  computing: 'Computing…',
+  progress: 'Building value sets',
+  cancelled: 'Search cancelled.',
+  noResults: 'Enter the data and press "Find networks".',
+  errorsIn: 'Cannot read',
+  exhaustive: 'Exhaustive search',
+  exhaustiveHint: 'Every possible network was considered: none is better.',
+  approximate: 'Approximate search with a guarantee',
+  approximateHint: 'No circuit can improve on the error shown by more than',
+  stats: (states: number, entries: number, ms: number) =>
+    `${states.toLocaleString('en')} states · ${entries.toLocaleString('en')} values · ${ms < 1000 ? `${ms.toFixed(0)} ms` : `${(ms / 1000).toFixed(2)} s`}`,
+  colRank: '#',
+  colCeq: 'Equivalent C',
+  colError: 'Error',
+  colParts: 'Parts',
+  colNetwork: 'Network',
+  within: 'within',
+  outside: 'outside',
+  detail: 'Detail',
+  diagram: 'Schematic',
+  verification: 'Independent verification',
+  verifiedOk: 'Verified: nodal analysis, energy balance and charge conservation agree.',
+  verifiedBad: 'Verification failed',
+  exactValue: 'Exact value',
+  exactError: 'Exact error',
+  exactZero: '0 (exact solution)',
+  interval: 'Tolerance interval',
+  intervalHint: (t: string) => `If every part varies by ±${t}, C_eq stays in this interval (the network is monotone and homogeneous).`,
+  parts: 'Parts and sharing',
+  colPart: 'Part',
+  colValue: 'Value',
+  colVoltage: 'Voltage',
+  colCharge: 'Charge',
+  colEnergy: 'Energy',
+  partsHint: 'For 1 V across A–B. The squared relative voltage is also the sensitivity ∂C_eq/∂C_i.',
+  export: 'Export',
+  copy: 'Copy',
+  copied: 'Copied',
+  download: 'Download',
+  share: 'Share link',
+  language: 'Language',
+  theme: 'Theme',
+  subnetwork: 'Sub-network',
+  bridge: 'Bridge',
+  close: 'Close',
+  offline: 'Everything runs in your browser (Rust → WebAssembly). No data leaves it.',
+};
+
+function initialLang(): Lang {
+  try {
+    const saved = localStorage.getItem('capassigner.lang');
+    if (saved === 'es' || saved === 'en') return saved;
+  } catch {
+    // Storage unavailable (private mode): fall through.
+  }
+  return typeof navigator !== 'undefined' && navigator.language.startsWith('en') ? 'en' : 'es';
+}
+
+export const i18n = $state({ lang: initialLang() as Lang });
+
+export function setLang(l: Lang): void {
+  i18n.lang = l;
+  try {
+    localStorage.setItem('capassigner.lang', l);
+  } catch {
+    // Ignore: the choice just won't persist.
+  }
+  document.documentElement.lang = l;
+}
+
+export function t(): Strings {
+  return i18n.lang === 'es' ? es : en;
+}

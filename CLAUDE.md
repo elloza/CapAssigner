@@ -1,28 +1,25 @@
-﻿# CapAssigner Development Guidelines
+# CapAssigner Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2025-10-20
+v2 is a static web app (GitHub Pages): a Rust engine compiled to WebAssembly plus a Svelte 5 / TypeScript UI. v1 (Python/Streamlit) lives in `legacy/` and is only used to generate golden fixtures.
 
-## Active Technologies
-- Python 3.9+ (requires modern type hints, pathlib, dataclasses) + Streamlit (UI framework), NumPy (numerical operations), Pandas (data handling), Matplotlib (plotting), NetworkX (graph visualization), SchemDraw (circuit diagrams) (001-app-scaffolding)
-- Python 3.9+ (requires modern type hints per PEP 484, 585, 604; pathlib; dataclasses) + Streamlit (UI framework), NumPy (numerical operations, matrix solving), Pandas (data handling for results tables), Matplotlib (plotting), NetworkX (graph visualization and topology representation), SchemDraw (circuit diagram rendering) (002-full-app-implementation)
-- Session state only (st.session_state); no persistent database required for MVP (002-full-app-implementation)
-
-## Project Structure
+## Layout
 ```
-src/
-tests/
+crates/capcore/     Rust engine: engine.rs (value DP, MITM root, log-grid pruning), cores.rs (3-connected cores),
+                    space.rs (multiset/size state spaces), laplace.rs (Kron reduction), rational.rs, api.rs (JSON), lib.rs (wasm-bindgen)
+src/                Svelte app; src/lib/physics.ts + exact.ts are the independent oracle (must not share code with Rust)
+src/workers/        solver.worker.ts runs the WASM engine
+tests/unit/         Vitest (units, physics properties, WASM cross-checks); tests/e2e/ Playwright
+tests/fixtures/     golden_v1.json (regenerate: cd legacy && python scripts/export_golden.py)
+legacy/             v1, unchanged
 ```
 
 ## Commands
-cd src; pytest; ruff check .
+- `npm run wasm` builds `src/wasm/pkg` (needs `~/.cargo/bin` on PATH); `npm run build`, `npm run dev`
+- `npm test` (Vitest), `npm run check` (svelte-check), `npm run build && npm run e2e` (Playwright)
+- `cargo test --workspace --release`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all`
+- Timing survey: `cargo test --release --test api timing -- --ignored --nocapture`
 
-## Code Style
-Python 3.9+ (requires modern type hints, pathlib, dataclasses): Follow standard conventions
-
-## Recent Changes
-- 006-lcapy-visualization (2025-12-12): Integrated lcapy library for professional CircuiTikZ-quality circuit diagrams. Added netlist conversion functions, updated render_sp_circuit() and render_graph_network() with lcapy as primary renderer and fallback to schemdraw/matplotlib. Fixed Exercise 02 disconnected terminal visualization. **BUG FIXES** (same day): Fixed TypeError with regular Graph (added MultiGraph detection), Fixed lcapy value format (changed from "15uF" to "1.5e-05" scientific notation). All 14 tests passing.
-- 002-full-app-implementation: Added Python 3.9+ (requires modern type hints per PEP 484, 585, 604; pathlib; dataclasses) + Streamlit (UI framework), NumPy (numerical operations, matrix solving), Pandas (data handling for results tables), Matplotlib (plotting), NetworkX (graph visualization and topology representation), SchemDraw (circuit diagram rendering)
-- 001-app-scaffolding: Added Python 3.9+ (requires modern type hints, pathlib, dataclasses) + Streamlit (UI framework), NumPy (numerical operations), Pandas (data handling), Matplotlib (plotting), NetworkX (graph visualization), SchemDraw (circuit diagrams)
-
-<!-- MANUAL ADDITIONS START -->
-<!-- MANUAL ADDITIONS END -->
+## Rules
+- Values cross the WASM boundary in farads; the engine normalises by the target. Leaf values must round-trip bit-exactly (serde_json `float_roundtrip`).
+- Never prune by closeness to the target inside the DP; only log-grid coarsening, which carries a proven bound (`stats.boundRel`).
+- Any engine change must keep the OEIS tests (`crates/capcore/tests/oeis.rs`) and the golden/oracle tests green.

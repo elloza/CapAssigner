@@ -1,0 +1,309 @@
+{
+  "generator": "legacy/scripts/export_golden.py",
+  "cases": [
+    {
+      "id": "classroom_4cap",
+      "capacitors": [
+        3e-12,
+        2e-12,
+        3e-12,
+        1e-12
+      ],
+      "target": 1e-12,
+      "source": "v1 tests/unit/test_sp_enumeration_classroom.py",
+      "v1_best_ceq": 1e-12,
+      "v1_best_rel_error": 0.0,
+      "v1_expression": "(C1+((C2||C4)+C3))"
+    },
+    {
+      "id": "pdf2p_association_01",
+      "capacitors": [
+        1.5e-05,
+        3e-06,
+        6e-06,
+        2e-05
+      ],
+      "target": 5.964912280701754e-06,
+      "source": "v1 tests/unit/test_pdf_exhaustive.py",
+      "v1_best_ceq": 5.964912280701755e-06,
+      "v1_best_rel_error": 1.4200258233380919e-16,
+      "v1_expression": "(((C1+C2)||C3)+C4)"
+    },
+    {
+      "id": "pdf2p_association_02",
+      "capacitors": [
+        2e-06,
+        8e-06,
+        7e-06,
+        4e-06
+      ],
+      "target": 9.733333333333334e-06,
+      "source": "v1 tests/unit/test_pdf_exhaustive.py",
+      "v1_best_ceq": 9.733333333333332e-06,
+      "v1_best_rel_error": 1.7404786587417128e-16,
+      "v1_expression": "(C1||((C2+C3)||C4))"
+    },
+    {
+      "id": "series_equal_2cap",
+      "capacitors": [
+        1e-11,
+        1e-11
+      ],
+      "target": 5e-12,
+      "source": "v1 tests/unit/test_fixtures.py",
+      "v1_best_ceq": 5e-12,
+      "v1_best_rel_error": 0.0,
+      "v1_expression": "(C1+C2)"
+    },
+    {
+      "id": "parallel_equal_2cap",
+      "capacitors": [
+        5e-12,
+        5e-12
+      ],
+      "target": 1e-11,
+      "source": "v1 tests/unit/test_fixtures.py",
+      "v1_best_ceq": 1e-11,
+      "v1_best_rel_error": 0.0,
+      "v1_expression": "(C1||C2)"
+    },
+    {
+      "id": "mixed_simple_3cap",
+      "capacitors": [
+        6e-12,
+        3e-12,
+        3e-12
+      ],
+      "target": 3e-12,
+      "source": "v1 tests/unit/test_fixtures.py",
+      "v1_best_ceq": 3e-12,
+      "v1_best_rel_error": 0.0,
+      "v1_expression": "(C1+(C2||C3))"
+    },
+    {
+      "id": "classroom_4cap_exact",
+      "capacitors": [
+        2e-12,
+        3e-12,
+        3e-12,
+        1e-12
+      ],
+      "target": 1e-12,
+      "source": "v1 tests/unit/test_fixtures.py",
+      "v1_best_ceq": 1e-12,
+      "v1_best_rel_error": 0.0,
+      "v1_expression": "((C1||C4)+(C2+C3))"
+    },
+    {
+      "id": "all_parallel_4cap",
+      "capacitors": [
+        1e-12,
+        2e-12,
+        3e-12,
+        4e-12
+      ],
+      "target": 1e-11,
+      "source": "v1 tests/unit/test_fixtures.py",
+      "v1_best_ceq": 1e-11,
+      "v1_best_rel_error": 0.0,
+      "v1_expression": "(C1||(C2||(C3||C4)))"
+    },
+    {
+      "id": "all_series_4cap",
+      "capacitors": [
+        1.2e-11,
+        1.2e-11,
+        1.2e-11,
+        1.2e-11
+      ],
+      "target": 3e-12,
+      "source": "v1 tests/unit/test_fixtures.py",
+      "v1_best_ceq": 3e-12,
+      "v1_best_rel_error": 0.0,
+      "v1_expression": "(C1+(C2+(C3+C4)))"
+    },
+    {
+      "id": "ladder_4cap",
+      "capacitors": [
+        3e-12,
+        6e-12,
+        6e-12,
+        3e-12
+      ],
+      "target": 1e-12,
+      "source": "v1 tests/unit/test_fixtures.py",
+      "v1_best_ceq": 1e-12,
+      "v1_best_rel_error": 0.0,
+      "v1_expression": "(C1+(C2+(C3+C4)))"
+    },
+    {
+      "id": "all_equal_5cap",
+      "capacitors": [
+        8e-12,
+        8e-12,
+        8e-12,
+        8e-12,
+        8e-12
+      ],
+      "target": 8e-12,
+      "source": "v1 tests/unit/test_fixtures.py",
+      "v1_best_ceq": 6.857142857142858e-12,
+      "v1_best_rel_error": 0.14285714285714277,
+      "v1_expression": "((C1||C2)+(C3||(C4+C5)))"
+    },
+    {
+      "id": "sequential_5cap",
+      "capacitors": [
+        1e-12,
+        2e-12,
+        3e-12,
+        4e-12,
+        5e-12
+      ],
+      "target": 1.5e-11,
+      "source": "v1 tests/unit/test_fixtures.py",
+      "v1_best_ceq": 1.5e-11,
+      "v1_best_rel_error": 0.0,
+      "v1_expression": "(C1||(C2||(C3||(C4||C5))))"
+    },
+    {
+      "id": "e12_subset_6cap",
+      "capacitors": [
+        1e-11,
+        1.2e-11,
+        1.5e-11,
+        1.8e-11,
+        2.2e-11,
+        2.7e-11
+      ],
+      "target": 2e-11,
+      "source": "v1 tests/unit/test_fixtures.py",
+      "v1_best_ceq": 2.000796812749004e-11,
+      "v1_best_rel_error": 0.00039840637450203894,
+      "v1_expression": "((C1+(((C3||C4)+C5)||C6))||C2)"
+    },
+    {
+      "id": "powers_of_two_6cap",
+      "capacitors": [
+        1e-12,
+        2e-12,
+        4e-12,
+        8e-12,
+        1.6e-11,
+        3.2e-11
+      ],
+      "target": 7e-12,
+      "source": "v1 tests/unit/test_fixtures.py",
+      "v1_best_ceq": 6.99828473413379e-12,
+      "v1_best_rel_error": 0.0002450379808871568,
+      "v1_expression": "((((C1||C6)+C4)||(C2||C3))+C5)"
+    },
+    {
+      "id": "equal_7cap",
+      "capacitors": [
+        1e-11,
+        1e-11,
+        1e-11,
+        1e-11,
+        1e-11,
+        1e-11,
+        1e-11
+      ],
+      "target": 1e-11,
+      "source": "v1 tests/unit/test_fixtures.py",
+      "v1_best_ceq": 1e-11,
+      "v1_best_rel_error": 0.0,
+      "v1_expression": "((C1+C2)||(C3+((C4+C5)||(C6+C7))))"
+    },
+    {
+      "id": "fibonacci_7cap",
+      "capacitors": [
+        1e-12,
+        1e-12,
+        2e-12,
+        3e-12,
+        5e-12,
+        8e-12,
+        1.3e-11
+      ],
+      "target": 5e-12,
+      "source": "v1 tests/unit/test_fixtures.py",
+      "v1_best_ceq": 5e-12,
+      "v1_best_rel_error": 0.0,
+      "v1_expression": "(C1||(C2||(((C3+(C5||C7))||C4)+C6)))"
+    },
+    {
+      "id": "random_8cap",
+      "capacitors": [
+        1.5e-12,
+        2.7e-12,
+        3.3e-12,
+        4.7e-12,
+        5.6e-12,
+        6.8e-12,
+        8.2e-12,
+        9.1e-12
+      ],
+      "target": 1e-11,
+      "source": "v1 tests/unit/test_fixtures.py",
+      "v1_best_ceq": 1.0000000000000001e-11,
+      "v1_best_rel_error": 1.6155871338926322e-16,
+      "v1_expression": "(((C1||C3)+(C2||((C4||C8)+(C5||C7))))||C6)"
+    },
+    {
+      "id": "decade_range_8cap",
+      "capacitors": [
+        1e-12,
+        2e-12,
+        3e-12,
+        4e-12,
+        5e-12,
+        7e-12,
+        8e-12,
+        1e-11
+      ],
+      "target": 5e-12,
+      "source": "v1 tests/unit/test_fixtures.py",
+      "v1_best_ceq": 5e-12,
+      "v1_best_rel_error": 0.0,
+      "v1_expression": "(C1||((C2+C4)||((C3||(C6||C8))+(C5+C7))))"
+    },
+    {
+      "id": "single_capacitor",
+      "capacitors": [
+        7.5e-12
+      ],
+      "target": 7.5e-12,
+      "source": "v1 tests/unit/test_fixtures.py",
+      "v1_best_ceq": 7.5e-12,
+      "v1_best_rel_error": 0.0,
+      "v1_expression": "C1"
+    },
+    {
+      "id": "all_identical_4cap",
+      "capacitors": [
+        1e-11,
+        1e-11,
+        1e-11,
+        1e-11
+      ],
+      "target": 1e-11,
+      "source": "v1 tests/unit/test_fixtures.py",
+      "v1_best_ceq": 1e-11,
+      "v1_best_rel_error": 0.0,
+      "v1_expression": "((C1+C2)||(C3+C4))"
+    },
+    {
+      "id": "extreme_ratio",
+      "capacitors": [
+        1e-12,
+        1e-09
+      ],
+      "target": 9.99e-13,
+      "source": "v1 tests/unit/test_fixtures.py",
+      "v1_best_ceq": 9.99000999000999e-13,
+      "v1_best_rel_error": 1.0000009998397397e-06,
+      "v1_expression": "(C1+C2)"
+    }
+  ]
+}

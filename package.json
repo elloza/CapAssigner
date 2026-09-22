@@ -1,0 +1,35 @@
+{
+  "name": "capassigner",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Capacitor network synthesis in the browser (Rust/WASM + Svelte).",
+  "license": "MIT",
+  "scripts": {
+    "wasm": "wasm-pack build crates/capcore --release --target web --out-dir ../../src/wasm/pkg --out-name capcore",
+    "dev": "npm run wasm && vite",
+    "build": "npm run wasm && vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test",
+    "rust:test": "cargo test --workspace",
+    "rust:lint": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@sveltejs/vite-plugin-svelte": "^7.3.0",
+    "@types/katex": "^0.16.8",
+    "@types/node": "^26.6.2",
+    "fast-check": "^4.10.2",
+    "svelte": "^5.57.1",
+    "svelte-check": "^4.7.6",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
+  },
+  "dependencies": {
+    "katex": "^0.18.7"
+  }
+}
