@@ -21,8 +21,10 @@
   let elapsed = $state(0);
   let expected = $state(0);
   let error: string | null = $state(null);
-  let result: { res: SolveResponse; ms: number; built: Built; form: FormState } | null = $state(null);
+  let result: { res: SolveResponse; ms: number; memoryMB: number; built: Built; form: FormState } | null = $state(null);
   let theme: 'auto' | 'light' | 'dark' = $state('auto');
+  /** Example shown in the dropdown; cleared when the user edits the form. */
+  let example = $state('');
 
   const built = $derived(buildRequest(form));
   const client = new SolverClient();
@@ -73,10 +75,11 @@
     const t0 = performance.now();
     const tick = setInterval(() => (elapsed = (performance.now() - t0) / 1000), 200);
     try {
-      const { res, ms } = await client.run(b.req, (f) => (progress = f));
-      result = { res, ms, built: b, form: { ...form } };
+      const { res, ms, memoryMB } = await client.run(b.req, (f) => (progress = f));
+      result = { res, ms, memoryMB, built: b, form: { ...form } };
     } catch (e) {
-      error = e instanceof CancelledError ? t().cancelled : e instanceof Error ? e.message : String(e);
+      const msg = e instanceof Error ? e.message : String(e);
+      error = e instanceof CancelledError ? t().cancelled : msg === 'out of memory' ? t().outOfMemory : msg;
     } finally {
       clearInterval(tick);
       running = false;
@@ -87,6 +90,7 @@
     const ex = EXAMPLES.find((e) => e.id === id);
     if (!ex) return;
     form = { ...DEFAULT_FORM, ...ex.form };
+    example = id;
     queueMicrotask(solve);
   }
 
@@ -132,7 +136,7 @@
 <main>
   {#if tab === 'solve'}
     <div class="solve">
-      <SolverForm bind:form {built} {running} onsolve={solve} onexample={loadExample} />
+      <SolverForm bind:form bind:example {built} {running} onsolve={solve} onexample={loadExample} />
       <Results {result} {error} {running} {progress} {elapsed} {expected} oncancel={cancel} onexample={loadExample} />
     </div>
   {:else if tab === 'theory'}

@@ -59,9 +59,13 @@ export function spice(sol: Solution, name: LeafName, title: string): string {
   const g = sol.graph;
   const node = (i: number) => (i === g.b ? '0' : i === g.a ? '1' : String(i + 1));
   const lines = [`* ${title}`, `* C_eq = ${sol.value.toExponential(9)} F between nodes 1 (A) and 0 (B)`];
-  for (const [u, v, k] of g.edges) {
-    lines.push(`${name(k).replace(/\W/g, '')} ${node(u)} ${node(v)} ${spiceValue(sol.leaves[k]!.value)}`);
-  }
+  // SPICE capacitor names must start with C; keep the user's label as a comment.
+  g.edges.forEach(([u, v, k], i) => {
+    const label = name(k);
+    const id = /^C\d+$/.test(label) ? label : `C${i + 1}`;
+    const note = id === label ? '' : ` ; ${label}`;
+    lines.push(`${id} ${node(u)} ${node(v)} ${spiceValue(sol.leaves[k]!.value)}${note}`);
+  });
   lines.push('* Check: .ac or .op with a source between 1 and 0', '.end');
   return lines.join('\n');
 }

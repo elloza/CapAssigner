@@ -1,10 +1,12 @@
 // Bilingual strings (Spanish by default) and the reactive language setting.
 
+import { localNumber, setDecimalComma } from './units';
+
 export type Lang = 'es' | 'en';
 
 function duration(s: number): string {
   if (s < 1) return `${Math.max(1, Math.round(s * 1000))} ms`;
-  if (s < 60) return `${s < 10 ? s.toFixed(1) : Math.round(s)} s`;
+  if (s < 60) return localNumber(`${s < 10 ? s.toFixed(1) : Math.round(s)} s`);
   return `${Math.floor(s / 60)} min ${Math.round(s % 60)} s`;
 }
 
@@ -37,8 +39,8 @@ const es = {
   topoSP: 'Serie-paralelo',
   topoBridge: 'Serie-paralelo + puentes',
   topoAll: 'Todas las redes',
-  topoHint: '«Todas» incluye cualquier red de dos terminales (puentes y núcleos 3-conexos), hasta 9 piezas.',
-  topoDisabled: 'Con más de 9 piezas solo se exploran redes serie-paralelo.',
+  topoHint: '«Todas» incluye cualquier red de dos terminales (puentes y núcleos 3-conexos), hasta 8 piezas en «usar todos».',
+  topoDisabled: 'Con más de 8 piezas solo se exploran redes serie-paralelo (las demás topologías son millones de combinaciones).',
   tolerance: 'Error aceptable',
   partTolerance: 'Tolerancia de las piezas',
   results: 'Resultados',
@@ -56,6 +58,7 @@ const es = {
   remaining: 'Restante',
   runningHint: 'El cálculo se hace en tu navegador, en segundo plano; la página sigue respondiendo.',
   cancelled: 'Búsqueda cancelada.',
+  outOfMemory: 'El navegador se ha quedado sin memoria para esta búsqueda. Reduce el número de piezas o de valores, o elige solo serie-paralelo.',
   emptyTitle: 'Encuentra la mejor asociación de condensadores',
   emptySteps: [
     'Escribe la capacidad objetivo y los condensadores disponibles.',
@@ -65,9 +68,16 @@ const es = {
   tryExample: 'O prueba un ejemplo:',
   errorsIn: 'No se entiende',
   exhaustive: 'Búsqueda exhaustiva',
-  exhaustiveHint: 'Se han considerado todas las redes posibles: no existe ninguna mejor.',
+  exhaustiveHint: (scope: string) => `Se han considerado todas las ${scope}: no existe ninguna mejor.`,
   approximate: 'Búsqueda con cota garantizada',
-  approximateHint: (b: string) => `Ninguna red puede mejorar el error del primer resultado en más de ${b}.`,
+  approximateHint: (scope: string, b: string) =>
+    `Entre las ${scope}, ninguna puede mejorar el error del primer resultado en más de ${b}.`,
+  partial: 'Búsqueda parcial',
+  partialHint: (b: string) =>
+    `Para las redes serie-paralelo la cota es ${b}; algunas redes con puentes u otros núcleos no se han explorado por su coste (reduce piezas o valores para incluirlas).`,
+  scopeSP: 'redes serie-paralelo',
+  scopeBridge: 'redes serie-paralelo y con puentes',
+  scopeAll: 'redes de dos terminales (cualquier topología)',
   stats: (states: number, entries: number, ms: number) =>
     `${states.toLocaleString('es')} estados · ${entries.toLocaleString('es')} valores · ${duration(ms / 1000)}`,
   colRank: '#',
@@ -80,6 +90,10 @@ const es = {
   detail: 'Solución',
   diagram: 'Esquema',
   legend: '∥ = paralelo · — = serie',
+  chartTitle: 'Dónde caen las soluciones respecto al objetivo',
+  chartTarget: 'objetivo',
+  chartParts: (p: number) => `${p} ${p === 1 ? 'pieza' : 'piezas'}`,
+  chartNote: 'Error relativo con signo en escala logarítmica simétrica; la banda verde es el error aceptable. Pulsa un punto para ver esa solución.',
   verification: 'Verificación independiente',
   verifiedOk: 'Verificado: análisis nodal, balance de energía y conservación de carga coinciden.',
   verifiedBad: 'La verificación ha fallado',
@@ -94,7 +108,10 @@ const es = {
   colVoltage: 'Tensión',
   colCharge: 'Carga',
   colEnergy: 'Energía',
-  partsHint: 'Con 1 V entre A y B. La tensión relativa al cuadrado es también la sensibilidad ∂C_eq/∂C_i.',
+  partsHint:
+    'Con 1 V entre A y B. La tensión al cuadrado es la sensibilidad absoluta ∂C_eq/∂C_i; la columna Energía es la sensibilidad relativa (suma 100 %).',
+  statSpread: 'Error típico con piezas independientes',
+  statHint: (t: string, k: string) => `si cada pieza tiene un error independiente de ±${t}, se promedian: √Σw² = ${k}`,
   export: 'Exportar',
   copy: 'Copiar',
   copied: 'Copiado',
@@ -137,8 +154,8 @@ const en: Strings = {
   topoSP: 'Series-parallel',
   topoBridge: 'Series-parallel + bridges',
   topoAll: 'All networks',
-  topoHint: '"All" includes any two-terminal network (bridges and 3-connected cores), up to 9 parts.',
-  topoDisabled: 'With more than 9 parts only series-parallel networks are explored.',
+  topoHint: '"All" includes any two-terminal network (bridges and 3-connected cores), up to 8 parts in "use all".',
+  topoDisabled: 'With more than 8 parts only series-parallel networks are explored (other topologies mean millions of combinations).',
   tolerance: 'Acceptable error',
   partTolerance: 'Part tolerance',
   results: 'Results',
@@ -156,6 +173,7 @@ const en: Strings = {
   remaining: 'Remaining',
   runningHint: 'The computation runs in your browser, in the background; the page stays responsive.',
   cancelled: 'Search cancelled.',
+  outOfMemory: 'The browser ran out of memory for this search. Use fewer parts or values, or choose series-parallel only.',
   emptyTitle: 'Find the best capacitor combination',
   emptySteps: [
     'Type the target capacitance and the capacitors you have.',
@@ -165,9 +183,16 @@ const en: Strings = {
   tryExample: 'Or try an example:',
   errorsIn: 'Cannot read',
   exhaustive: 'Exhaustive search',
-  exhaustiveHint: 'Every possible network was considered: none is better.',
+  exhaustiveHint: (scope: string) => `Every one of the ${scope} was considered: none is better.`,
   approximate: 'Search with a guaranteed bound',
-  approximateHint: (b: string) => `No network can improve on the first result's error by more than ${b}.`,
+  approximateHint: (scope: string, b: string) =>
+    `Among the ${scope}, none can improve on the first result's error by more than ${b}.`,
+  partial: 'Partial search',
+  partialHint: (b: string) =>
+    `For series-parallel networks the bound is ${b}; some networks with bridges or other cores were not explored because of their cost (use fewer parts or values to include them).`,
+  scopeSP: 'series-parallel networks',
+  scopeBridge: 'series-parallel and bridge networks',
+  scopeAll: 'two-terminal networks (any topology)',
   stats: (states: number, entries: number, ms: number) =>
     `${states.toLocaleString('en')} states · ${entries.toLocaleString('en')} values · ${duration(ms / 1000)}`,
   colRank: '#',
@@ -180,6 +205,10 @@ const en: Strings = {
   detail: 'Solution',
   diagram: 'Schematic',
   legend: '∥ = parallel · — = series',
+  chartTitle: 'Where the solutions fall relative to the target',
+  chartTarget: 'target',
+  chartParts: (p: number) => `${p} ${p === 1 ? 'part' : 'parts'}`,
+  chartNote: 'Signed relative error on a symmetric log scale; the green band is the acceptable error. Click a dot to see that solution.',
   verification: 'Independent verification',
   verifiedOk: 'Verified: nodal analysis, energy balance and charge conservation agree.',
   verifiedBad: 'Verification failed',
@@ -194,7 +223,10 @@ const en: Strings = {
   colVoltage: 'Voltage',
   colCharge: 'Charge',
   colEnergy: 'Energy',
-  partsHint: 'For 1 V across A–B. The squared relative voltage is also the sensitivity ∂C_eq/∂C_i.',
+  partsHint:
+    'For 1 V across A–B. The squared voltage is the absolute sensitivity ∂C_eq/∂C_i; the Energy column is the relative sensitivity (sums to 100 %).',
+  statSpread: 'Typical error with independent parts',
+  statHint: (t: string, k: string) => `if each part has an independent ±${t} error they average out: √Σw² = ${k}`,
   export: 'Export',
   copy: 'Copy',
   copied: 'Copied',
@@ -217,9 +249,11 @@ function initialLang(): Lang {
 }
 
 export const i18n = $state({ lang: initialLang() as Lang });
+setDecimalComma(i18n.lang === 'es');
 
 export function setLang(l: Lang): void {
   i18n.lang = l;
+  setDecimalComma(l === 'es');
   try {
     localStorage.setItem('capassigner.lang', l);
   } catch {

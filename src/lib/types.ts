@@ -13,7 +13,6 @@ export interface SolveRequest {
   topK?: number;
   /** 0 = series-parallel only; 5 adds bridges; up to 9 = every network. */
   maxCoreEdges?: number;
-  eps?: number;
   maxEntries?: number;
 }
 
@@ -59,6 +58,8 @@ export interface SolveStats {
   candidates: number;
   epsUsed: number;
   exhaustive: boolean;
+  /** Every enabled non-series-parallel core was explored. */
+  coresComplete: boolean;
   boundRel: number;
 }
 

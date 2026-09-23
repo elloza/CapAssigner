@@ -146,8 +146,8 @@ fn d1_all_networks_distinct_values_match_brute_force() {
 // D2 — are non-SP cores silently skipped by the work guard?
 // ---------------------------------------------------------------------------
 
-/// Diagnostic behind finding C1 of docs/REVISION.md: prints whether the
-/// non-series-parallel work guard fires. Not an assertion (yet).
+/// Diagnostic behind finding C1 of docs/REVISION.md: prints how much the
+/// core work guard thins child sets with the web's configuration.
 #[test]
 #[ignore]
 fn d2_core_work_guard() {
@@ -169,9 +169,10 @@ fn d2_core_work_guard() {
         let mut top = TopK::new(5);
         eng.query(full, 1.2345, &mut top);
         eprintln!(
-            "D2 all n={n}: coarsened={} cores_skipped={}",
+            "D2 all n={n}: coarsened={} exhaustive={} eps_bound={:.2e}",
             eng.stats.coarsened,
-            eng.cores_skipped()
+            eng.exhaustive(),
+            eng.eps_bound()
         );
     }
     // Inventory (unlimited E-series), as the UI configures it.
@@ -214,10 +215,11 @@ fn d2_core_work_guard() {
                 eng.query(s, 31.416, &mut top);
             }
             eprintln!(
-                "D2 inventory {m_label} (m={}) K={k}: coarsened={} cores_skipped={}",
+                "D2 inventory {m_label} (m={}) K={k}: coarsened={} cores_complete={} eps_bound={:.2e}",
                 vals.len(),
                 eng.stats.coarsened,
-                eng.cores_skipped()
+                eng.exhaustive(),
+                eng.eps_bound()
             );
         }
     }

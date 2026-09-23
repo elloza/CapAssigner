@@ -7,15 +7,19 @@
 
   interface Props {
     form: FormState;
+    /** Selected example id ('' when the form was edited by hand). */
+    example: string;
     built: Built;
     running: boolean;
     onsolve: () => void;
     onexample: (id: string) => void;
   }
-  let { form = $bindable(), built, running, onsolve, onexample }: Props = $props();
+  let { form = $bindable(), example = $bindable(), built, running, onsolve, onexample }: Props = $props();
 
   const series: Series[] = ['E3', 'E6', 'E12', 'E24', 'E48', 'E96'];
   const decades = Array.from({ length: 16 }, (_, i) => i - 15);
+
+  let exampleSelect: HTMLSelectElement | undefined = $state();
 
   const chips = $derived(form.mode === 'all' ? parseList(form.caps, form.unit).values : []);
   const est = $derived(built.req ? estimate(built.req) : null);
@@ -30,17 +34,10 @@
   }
 </script>
 
-<form class="panel" onsubmit={submit} aria-label={t().tabSolve}>
+<form class="panel" onsubmit={submit} oninput={(e) => e.target !== exampleSelect && (example = '')} aria-label={t().tabSolve}>
   <label class="examples">
     <span>{t().examples}</span>
-    <select
-      value=""
-      onchange={(e) => {
-        const sel = e.currentTarget as HTMLSelectElement;
-        onexample(sel.value);
-        sel.value = '';
-      }}
-    >
+    <select bind:this={exampleSelect} value={example} onchange={(e) => onexample((e.currentTarget as HTMLSelectElement).value)}>
       <option value="" disabled>—</option>
       {#each EXAMPLES as ex (ex.id)}
         <option value={ex.id}>{ex[i18n.lang]}</option>

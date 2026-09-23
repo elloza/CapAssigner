@@ -36,9 +36,6 @@ pub struct Request {
     /// Largest non-series-parallel core to consider (0 = series-parallel only).
     #[serde(default)]
     pub max_core_edges: usize,
-    /// Relative merge threshold (0 = only merge values equal to float rounding).
-    #[serde(default)]
-    pub eps: f64,
     #[serde(default = "default_budget")]
     pub max_entries: usize,
 }
@@ -59,8 +56,10 @@ fn default_budget() -> usize {
 /// Limits enforced on requests coming from the UI.
 pub const MAX_ALL_PARTS: usize = 12;
 pub const MAX_INVENTORY_PARTS: usize = 10;
-/// Core evaluations allowed per state before its cores are skipped.
-pub const MAX_CORE_WORK: u64 = 20_000_000;
+/// Largest "use all" problem for which non-series-parallel networks are explored.
+pub const MAX_CORE_PARTS: usize = 8;
+/// Core evaluations for a whole search (a few seconds in the browser).
+pub const MAX_CORE_WORK: u64 = 40_000_000;
 /// Float values closer than this are the same value.
 pub const FLOAT_EPS: f64 = 1e-12;
 
@@ -112,6 +111,9 @@ pub struct StatsOut {
     pub eps_used: f64,
     /// Every network was considered (up to float rounding).
     pub exhaustive: bool,
+    /// Every enabled non-series-parallel core was explored. When false the
+    /// bound only covers the networks that do not use the skipped cores.
+    pub cores_complete: bool,
     /// Proven bound: the true optimum's relative error is at most this much
     /// better than the best reported one.
     pub bound_rel: f64,
@@ -141,11 +143,18 @@ fn validate(req: &Request) -> Result<(), String> {
     if req.values.iter().any(|v| !(v.is_finite() && *v > 0.0)) {
         return Err("capacitor values must be positive numbers".into());
     }
+    // Values are normalised by the target; keep the ratios far from the f64
+    // limits so no value underflows, overflows or becomes subnormal (the log
+    // grid bound assumes normal doubles).
+    if req
+        .values
+        .iter()
+        .any(|v| !(1e-150..=1e150).contains(&(v / req.target)))
+    {
+        return Err("values and target differ by more than 150 orders of magnitude".into());
+    }
     if req.top_k == 0 || req.top_k > 1000 {
         return Err("topK must be between 1 and 1000".into());
-    }
-    if !(req.eps >= 0.0 && req.eps < 0.1) {
-        return Err("eps must be in [0, 0.1)".into());
     }
     match req.mode {
         Mode::All if req.values.len() > MAX_ALL_PARTS => Err(format!(
@@ -360,9 +369,13 @@ fn run<S: Space>(
             states: st.states_built,
             entries: st.entries,
             candidates: st.candidates,
-            eps_used: st.eps_used,
-            exhaustive: eng.exhaustive() && eng.p.eps <= FLOAT_EPS,
-            bound_rel: (st.eps_used * depth.saturating_sub(1) as f64).exp_m1(),
+            eps_used: eng.eps_bound(),
+            exhaustive: eng.exhaustive(),
+            cores_complete: eng.cores_complete(),
+            // Proven bound: ε_opt ≥ ε_found − (e^{(n−1)ε} − 1)(1 + ε_opt), and
+            // ε_opt ≤ ε_found, so (1 + ε_found) makes it safe to display.
+            bound_rel: (eng.eps_bound() * depth.saturating_sub(1) as f64).exp_m1()
+                * (1.0 + top.items.first().map_or(0.0, |c| c.err)),
         },
         cores: core_ids
             .into_iter()
@@ -380,9 +393,15 @@ pub fn solve(req: &Request, progress: &mut dyn FnMut(f64)) -> Result<Response, S
     validate(req)?;
     let target = req.target;
     let params = Params {
-        eps: req.eps.max(FLOAT_EPS),
+        eps: FLOAT_EPS,
         max_per_state: 0,
-        max_core_edges: req.max_core_edges.min(MAX_CORE_EDGES),
+        // Beyond MAX_CORE_PARTS distinct-ish parts the non-series-parallel
+        // search space (millions of core decompositions) is out of reach.
+        max_core_edges: if req.mode == Mode::All && req.values.len() > MAX_CORE_PARTS {
+            0
+        } else {
+            req.max_core_edges.min(MAX_CORE_EDGES)
+        },
         max_entries: req.max_entries,
         max_core_work: MAX_CORE_WORK,
     };

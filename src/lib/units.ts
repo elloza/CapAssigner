@@ -3,8 +3,11 @@
 // Accepted forms (all case-sensitive only where it matters):
 //   5.2pF  5.2 pF  5.2p  5,2pF  4p7 / 4n7 / 2u2 (RKM code)  10fF  2.2µF 2.2uF  1mF  0.5F
 //   1e-11  1.2E-12  1.2*10^-12  1.2×10^-12   → farads (exponent notation)
+//   1.5e3pF                                   → exponent with a prefix
 //   170/71pF                                  → exact fraction
 //   5.2                                       → the chosen default unit
+//   0.0000000000052                           → farads (a bare number below
+//                                               1e-3 is read in farads, as in v1)
 // A bare "f" suffix is femto (as in SPICE); "F" alone is farads.
 
 import { Frac } from './exact';
@@ -84,12 +87,21 @@ export function parseCapacitance(raw: string, defaultUnit: Prefix = 'p'): ParseR
     return done(scaled(`${m[1]}.${m[3]}`, PREFIX_EXP[prefix]), input);
   }
 
+  // Exponent with a prefix: 1.5e3pF.
+  m = new RegExp(`^${num}[eE]([+-]?\\d+)([fpPnNuUµμm])F?$`).exec(s);
+  if (m) {
+    const prefix = PREFIX_ALIASES[m[3]!]!;
+    return done(scaled(m[1]!, Number(m[2]) + PREFIX_EXP[prefix]), input);
+  }
+
   // Number with optional prefix and optional F.
   m = new RegExp(`^${num}([fpPnNuUµμm]?)([Ff]?)$`).exec(s);
   if (m) {
     const [, mant, pre, unit] = m as unknown as [string, string, string, string];
     let prefix: Prefix;
-    if (pre === '' && unit === '') prefix = defaultUnit;
+    // A tiny bare number is almost surely already in farads (v1 behaviour).
+    if (pre === '' && unit === '' && Number(mant) !== 0 && Math.abs(Number(mant)) < 1e-3) prefix = '';
+    else if (pre === '' && unit === '') prefix = defaultUnit;
     else if (pre === '' && unit === 'F') prefix = '';
     else if (pre === '' && unit === 'f') prefix = 'f';
     else if (pre === 'f' && unit !== '') prefix = 'f';
@@ -105,9 +117,12 @@ export function parseCapacitance(raw: string, defaultUnit: Prefix = 'p'): ParseR
  */
 export function splitList(text: string): string[] {
   return text
-    .replace(/(\d),(?=\d)/g, '$1\u0000')
-    .split(/[\s;,]+/)
-    .map((t) => t.replace(/\u0000/g, ','))
+    .split(/[\s;]+/)
+    .flatMap((tok) => {
+      // "1,2,3" is a list; "4,7" (a single comma between digits) is a decimal.
+      const decimal = /^[^,]*\d,\d[^,]*$/.test(tok);
+      return decimal ? [tok] : tok.split(',');
+    })
     .filter((t) => t !== '');
 }
 
@@ -136,6 +151,18 @@ export function parseList(
   return { values, errors };
 }
 
+let decimalComma = false;
+
+/** Display numbers with a decimal comma (Spanish) instead of a point. */
+export function setDecimalComma(on: boolean): void {
+  decimalComma = on;
+}
+
+/** Localise the decimal separator of an already formatted number. */
+export function localNumber(s: string): string {
+  return decimalComma ? s.replace(/(\d)\.(\d)/g, '$1,$2') : s;
+}
+
 /** Choose the prefix that puts the mantissa in [1, 1000). */
 export function bestPrefix(farads: number): Prefix {
   const a = Math.abs(farads);
@@ -156,7 +183,7 @@ export function formatCapacitance(farads: number, digits = 4): string {
     mant = Number((farads / 10 ** PREFIX_EXP[next]).toPrecision(digits));
     p = next;
   }
-  return `${mant} ${p}F`;
+  return localNumber(`${mant} ${p}F`);
 }
 
 export function formatPercent(rel: number, digits = 3): string {
@@ -165,5 +192,5 @@ export function formatPercent(rel: number, digits = 3): string {
   if (Math.abs(rel) < 1e-12) return '0 %';
   const a = Math.abs(pct);
   const s = a >= 0.01 ? pct.toFixed(digits) : pct.toExponential(2);
-  return `${pct > 0 ? '+' : ''}${s} %`;
+  return localNumber(`${pct > 0 ? '+' : ''}${s} %`);
 }

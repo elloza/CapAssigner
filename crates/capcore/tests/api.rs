@@ -13,7 +13,6 @@ fn req(mode: Mode, values: &[f64], target: f64) -> Request {
         min_parts: 1,
         top_k: 10,
         max_core_edges: 0,
-        eps: 0.0,
         max_entries: 6_000_000,
     }
 }
@@ -172,6 +171,8 @@ fn invalid_requests_are_rejected() {
             top_k: 0,
             ..req(Mode::All, &[1.0], 1.0)
         },
+        // Ratios that would underflow after normalisation (external audit).
+        req(Mode::All, &[1e-200, 1.0], 1e150),
     ];
     for r in &bad {
         assert!(solve(r, &mut |_| {}).is_err(), "{r:?}");
@@ -267,5 +268,104 @@ fn inventory_timing_survey() {
                 }
             }
         }
+    }
+}
+
+/// Regression for C1 (docs/REVISION.md): when the core work guard fires, the
+/// non-series-parallel networks must still be explored and the reported bound
+/// must cover them. Target = exact value of a network containing a bridge.
+#[test]
+fn bridge_targets_stay_within_the_reported_bound_under_the_work_guard() {
+    use capcore::laplace::ceq;
+    let bridge = |c: [f64; 5]| ceq(4, 0, 1, &[(0, 2), (0, 3), (2, 1), (3, 1), (2, 3)], &c);
+    let series = |a: f64, b: f64| a * b / (a + b);
+
+    // "Use all", 9 distinct parts: bridge(1..5) in series with (6 ∥ 7) and 8, parallel with 9.
+    let caps: Vec<f64> = (1..=9).map(|k| k as f64 * 1.37e-12).collect();
+    let c = |k: usize| caps[k - 1];
+    let target = series(
+        series(bridge([c(1), c(2), c(3), c(4), c(5)]), c(6) + c(7)),
+        c(8),
+    ) + c(9);
+    let r = Request {
+        max_core_edges: 9,
+        top_k: 3,
+        ..req(Mode::All, &caps, target)
+    };
+    let res = run(&r);
+    let best = res.solutions[0].rel_error.abs();
+    assert!(
+        best <= res.stats.bound_rel + 1e-12,
+        "use-all: best {best:e} outside bound {:e}",
+        res.stats.bound_rel
+    );
+
+    // Inventory: 48 E24 values, up to 6 parts; target = a bridge of E24 values
+    // in series with one more part (not reachable in series-parallel).
+    let e24 = [
+        1.0, 1.1, 1.2, 1.3, 1.5, 1.6, 1.8, 2.0, 2.2, 2.4, 2.7, 3.0, 3.3, 3.6, 3.9, 4.3, 4.7, 5.1,
+        5.6, 6.2, 6.8, 7.5, 8.2, 9.1,
+    ];
+    let vals: Vec<f64> = e24.iter().flat_map(|v| [v * 1e-12, v * 1e-11]).collect();
+    let target = series(
+        bridge([1.1e-12, 3.6e-12, 2.4e-12, 7.5e-12, 5.1e-12]),
+        9.1e-11,
+    );
+    let r = Request {
+        max_core_edges: 9,
+        max_parts: 6,
+        max_entries: 1_000_000,
+        top_k: 3,
+        ..req(Mode::Inventory, &vals, target)
+    };
+    let res = run(&r);
+    let best = res.solutions[0].rel_error.abs();
+    // Either every core was explored and the bound covers the bridge, or the
+    // skipped cores are reported and nothing claims to be exhaustive.
+    if res.stats.cores_complete {
+        assert!(
+            best <= res.stats.bound_rel + 1e-12,
+            "inventory: best {best:e} outside bound"
+        );
+    } else {
+        assert!(!res.stats.exhaustive);
+    }
+}
+
+/// Cost survey of "all networks" with 9 parts: `cargo test --release --test api core9 -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn core9_survey() {
+    for (label, caps) in [
+        (
+            "9 distinct",
+            (1..=9)
+                .map(|k| (k as f64 + 0.37).sqrt() * 1e-12)
+                .collect::<Vec<_>>(),
+        ),
+        (
+            "9 with a pair",
+            (1..=9)
+                .map(|k| ((k.min(8)) as f64 + 0.37).sqrt() * 1e-12)
+                .collect(),
+        ),
+        (
+            "8 distinct",
+            (1..=8).map(|k| (k as f64 + 0.37).sqrt() * 1e-12).collect(),
+        ),
+    ] {
+        let t = std::time::Instant::now();
+        let res = run(&Request {
+            max_core_edges: 9,
+            top_k: 5,
+            ..req(Mode::All, &caps, 2.345e-12)
+        });
+        eprintln!(
+            "core9 {label}: {:.2}s exhaustive={} bound={:.2e} best={:.2e}",
+            t.elapsed().as_secs_f64(),
+            res.stats.exhaustive,
+            res.stats.bound_rel,
+            res.solutions[0].rel_error.abs()
+        );
     }
 }

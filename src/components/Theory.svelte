@@ -59,7 +59,7 @@
     { n: '≤ 6', sp: '< 0,1 s', all: '< 0,1 s', g: 'exhaustiva' },
     { n: '7', sp: '≈ 0,1 s', all: '≈ 0,1 s', g: 'exhaustiva' },
     { n: '8', sp: '≈ 0,4 s', all: '≈ 1,5 s', g: 'exhaustiva' },
-    { n: '9', sp: '≈ 6 s', all: '≈ 16 s', g: 'cota ≤ 0,05 %' },
+    { n: '9', sp: '≈ 6 s', all: '—', g: 'cota ≤ 0,05 %' },
     { n: '10', sp: '≈ 5 s', all: '—', g: 'cota ≤ 0,3 %' },
     { n: '12', sp: '≈ 50 s', all: '—', g: 'cota ≤ 5 %' },
   ];
@@ -116,12 +116,34 @@
     <p>Es la misma matemática que la conductancia efectiva de una red de resistencias con {@html m('G_e = c_e')}. De ella se deducen las propiedades que usa la aplicación:</p>
     <ul>
       <li><b>Energía</b>: {@html m('\\tfrac12 C_{eq} V^2 = \\sum_e \\tfrac12 c_e\\, \\Delta v_e^2')}. La tabla «Piezas y reparto» muestra la tensión, la carga y la energía de cada pieza.</li>
-      <li><b>Sensibilidad</b>: {@html m('\\partial C_{eq}/\\partial c_e = \\Delta v_e^2')}. La pieza con más tensión relativa es la que más influye; si una pieza no tiene tensión (puente equilibrado), no influye.</li>
+      <li>
+        <b>Sensibilidad</b>: {@html m('\\partial C_{eq}/\\partial c_e = \\Delta v_e^2')} es la sensibilidad absoluta, por faradio. Para errores
+        <em>porcentuales</em> importa la sensibilidad relativa o elasticidad {@html m('w_e = \\frac{c_e}{C_{eq}}\\frac{\\partial C_{eq}}{\\partial c_e} = \\frac{c_e\\,\\Delta v_e^2}{C_{eq}}')},
+        que es la fracción de energía de la pieza (columna «Energía»). Por el teorema de Euler para funciones homogéneas, {@html m('\\sum_e w_e = 1')}. Una pieza
+        sin tensión (puente equilibrado) no influye.
+      </li>
       <li><b>Monotonía</b> (Rayleigh): aumentar cualquier {@html m('c_e')} nunca disminuye {@html m('C_{eq}')}. <b>Homogeneidad</b>: {@html m('C_{eq}(k\\,c) = k\\,C_{eq}(c)')}.</li>
       <li><b>Cotas</b>: {@html m('\\big(\\sum_e 1/c_e\\big)^{-1} \\le C_{eq} \\le \\sum_e c_e')}.</li>
       <li>
         <b>Tolerancias</b>: si cada pieza puede variar ±δ, por monotonía y homogeneidad {@html m('C_{eq} \\in [(1-\\delta)\\,C_{eq},\\,(1+\\delta)\\,C_{eq}]')}.
-        Ninguna topología reduce ese error común de escala.
+        Ninguna topología reduce ese peor caso común de escala.
+      </li>
+      <li>
+        <b>Dispersión estadística</b>: si los errores de las piezas son independientes, con desviación relativa {@html m('\\sigma')}, a primer orden
+        {@html m('\\sigma_{C}/C_{eq} \\approx \\sigma\\,\\sqrt{\\textstyle\\sum_e w_e^2}')}, que está entre {@html m('\\sigma/\\sqrt n')} (reparto uniforme) y
+        {@html m('\\sigma')}. Aquí la topología <em>sí</em> importa: repartir la energía entre muchas piezas promedia sus errores. Se muestra en cada solución.
+      </li>
+    </ul>
+    <h3>Límites del modelo</h3>
+    <ul>
+      <li>
+        <b>Tensión en continua</b>: la columna «Tensión» es el reparto capacitivo, válido en alterna o al cargar desde el estado descargado. En continua,
+        a largo plazo, la tensión entre condensadores en serie la fijan sus <em>resistencias de fuga</em>; por eso se añaden resistencias de equilibrado.
+      </li>
+      <li><b>Dieléctricos</b>: las cerámicas de clase II (X7R, Y5V…) pierden buena parte de su capacidad con la tensión continua aplicada y con la temperatura.</li>
+      <li>
+        <b>Parásitos</b>: con objetivos de pocos pF, las capacidades parásitas de pistas y cables (0,1–1 pF) son del orden del error buscado. A alta
+        frecuencia cuentan también la inductancia y la resistencia serie (ESL, ESR).
       </li>
     </ul>
 
@@ -129,7 +151,8 @@
     <p>
       Una red <b>serie-paralelo</b> (SP) se construye combinando subredes en serie o en paralelo. Tiene nodos internos, pero siempre se puede
       reducir paso a paso con las dos fórmulas anteriores. No todas las redes son así. La más pequeña que no se puede reducir es el
-      <b>puente de Wheatstone</b>: cinco piezas, con una de ellas entre los dos nodos centrales.
+      <b>puente de Wheatstone</b>: cinco piezas, con una de ellas entre los dos nodos centrales. De hecho, Duffin (1965) demostró que una red de dos
+      terminales es serie-paralelo si y solo si no contiene un puente de Wheatstone embebido.
     </p>
     <figure class="fig">
       <div class="svg">{@html bridgeSvg}</div>
@@ -140,12 +163,13 @@
       </figcaption>
     </figure>
     <p>
-      Para no dejarse ninguna red, CapAssigner usa la <b>descomposición SPQR</b>. Toda red de dos terminales en la que cada pieza almacena carga
-      queda 2-conexa al añadirle una arista virtual A–B. Esa red se descompone de forma única en nodos de tres tipos: <em>serie</em>,
+      Para no dejarse ninguna red, CapAssigner usa la <b>descomposición SPQR</b>. Toda red de dos terminales en la que cada pieza está en algún
+      camino simple entre A y B (una condición estructural, que no depende de los valores) queda 2-conexa al añadirle una arista virtual A–B. Esa red se descompone de forma única en nodos de tres tipos: <em>serie</em>,
       <em>paralelo</em> y <em>rígido</em>. Un nodo rígido es un grafo 3-conexo cuyas aristas se sustituyen por subredes de dos terminales.
       Por tanto, basta conocer los grafos 3-conexos pequeños («núcleos»). La aplicación los genera por fuerza bruta con etiquetado canónico:
       todos los de hasta 10 aristas, que tienen como mucho 6 vértices (K₄, la rueda W₄, K₅−e, K₅, el prisma, K₃,₃…). Después quita la arista
-      A–B. Con ellos, la búsqueda cubre <b>todas las redes posibles de hasta 9 piezas</b>.
+      A–B. Con ellos, la recurrencia cubre <b>todas las redes posibles de hasta 9 piezas</b>. En la web se usan hasta 8 piezas en «usar todos»: con 9
+      piezas distintas hay millones de formas de repartirlas entre las aristas de los núcleos.
     </p>
     {#if gallery.length}
       <div class="gallery">
@@ -161,8 +185,9 @@
       </p>
     {/if}
     <p>
-      Las redes con piezas que no almacenan carga (colgando de un solo nodo o en un lazo cerrado) no se consideran: su valor es el de una red
-      más pequeña y en el modo «usar todos» serían trampas.
+      Se excluyen las piezas que no están en ningún camino entre A y B (colgando de un solo nodo o en un lazo cerrado): nunca conducen carga, sean
+      cuales sean los valores, así que su red equivale a una más pequeña, y en «usar todos» serían trampas. Sí se incluyen redes en las que una
+      pieza no conduce solo por casualidad de valores, como el puente equilibrado.
     </p>
 
     <h2 id="s4">4. Cómo busca</h2>
@@ -176,9 +201,11 @@
     {@html m('V(S) = \\bigcup_{S = L \\uplus R} \\big\\{\\, a + b,\\ \\tfrac{ab}{a+b} \\;:\\; a \\in V(L),\\ b \\in V(R) \\,\\big\\} \\;\\cup\\; \\bigcup_{\\text{núcleos } \\mathcal R} \\big\\{\\, C_{eq}^{\\mathcal R}(x_1,\\dots,x_m) : x_i \\in V(S_i),\\ S = S_1 \\uplus \\dots \\uplus S_m \\big\\}', true)}
     <p>
       Los estados se construyen de menor a mayor tamaño. Dos redes con el mismo valor se funden al generarse, así que nunca se enumeran árboles
-      repetidos. Esto importa: el número de redes SP distintas con {@html m('n')} piezas diferentes crece como 1, 2, 8, 52, 472, 5504, 78416…
-      (OEIS A006351), mientras que los estados solo son {@html m('2^n')}. El valor de un núcleo con sus aristas rellenas se calcula por reducción
-      de Kron sobre como mucho 6 nodos.
+      repetidos, como los árboles equivalentes por conmutatividad y asociatividad que enumeraba la v1. Además, cada subresultado se comparte entre
+      todos los estados que lo usan, y con valores repetidos o racionales muchas redes coinciden en valor y se funden. Con piezas distintas y
+      genéricas casi no hay coincidencias: el conjunto de un estado de {@html m('k')} piezas tiene del orden de tantos valores como redes SP distintas
+      (1, 2, 8, 52, 472, 5504, 78416…, OEIS A006351). Por eso la memoria crece rápido y a partir de unas 9 piezas hay que podar (§5). El valor de un
+      núcleo con sus aristas rellenas se calcula por reducción de Kron sobre como mucho 6 nodos.
     </p>
     <h3>4.2 Encuentro en el medio en la raíz</h3>
     <p>
@@ -201,7 +228,8 @@
 
     <h2 id="s5">5. Garantías</h2>
     <p>
-      Si todos los estados caben en memoria, la búsqueda es <b>exhaustiva</b>: ninguna red da un error menor que el primer resultado. Si no caben
+      Si todos los estados caben en memoria, la búsqueda es <b>exhaustiva</b> dentro de la topología elegida: ninguna red da un error menor que el
+      primer resultado (dos valores a menos de {@html m('10^{-12}')} relativo se consideran iguales). Si no caben
       (a partir de unas 9 piezas distintas), los valores de cada estado se agrupan en una rejilla logarítmica de anchura {@html m('\\varepsilon')} y se
       conserva uno por celda. Serie, paralelo y cualquier núcleo son monótonos y 1-homogéneos en sus entradas, luego no expansivos en escala
       logarítmica: si cada entrada cambia como mucho un factor {@html m('e^{\\delta}')}, la salida también. Por inducción sobre la profundidad de la red,
@@ -211,6 +239,11 @@
     <p>
       Esa cota se muestra en el resumen («búsqueda con cota garantizada»). Es un peor caso; en la práctica el error encontrado suele ser muchos órdenes
       de magnitud menor. Nunca se descarta una subred por estar «lejos del objetivo», porque combinada con otra podría dar el óptimo.
+    </p>
+    <p>
+      Los núcleos no serie-paralelo tienen además un presupuesto de evaluaciones. Si un estado lo supera, sus núcleos se evalúan sobre copias de los
+      conjuntos hijos adelgazadas con la misma rejilla, y esa anchura se suma a la cota. Si ni así cabe con una anchura útil, esos núcleos no se
+      exploran y el resumen lo indica como «búsqueda parcial»: la cota solo cubre entonces las redes que no los necesitan.
     </p>
 
     <h2 id="s6">6. Verificación</h2>
@@ -267,12 +300,34 @@
     <p>This is the same mathematics as the effective conductance of a resistor network with {@html m('G_e = c_e')}. The app relies on these consequences:</p>
     <ul>
       <li><b>Energy</b>: {@html m('\\tfrac12 C_{eq} V^2 = \\sum_e \\tfrac12 c_e\\, \\Delta v_e^2')}. The "Parts and sharing" table shows the voltage, charge and energy of each part.</li>
-      <li><b>Sensitivity</b>: {@html m('\\partial C_{eq}/\\partial c_e = \\Delta v_e^2')}. The part with the largest relative voltage matters most; a part with no voltage (balanced bridge) does not matter.</li>
+      <li>
+        <b>Sensitivity</b>: {@html m('\\partial C_{eq}/\\partial c_e = \\Delta v_e^2')} is the absolute sensitivity, per farad. For <em>percentage</em>
+        errors what matters is the relative sensitivity or elasticity {@html m('w_e = \\frac{c_e}{C_{eq}}\\frac{\\partial C_{eq}}{\\partial c_e} = \\frac{c_e\\,\\Delta v_e^2}{C_{eq}}')},
+        which is the part's energy share ("Energy" column). By Euler's theorem for homogeneous functions, {@html m('\\sum_e w_e = 1')}. A part with no
+        voltage (balanced bridge) has no influence.
+      </li>
       <li><b>Monotonicity</b> (Rayleigh): raising any {@html m('c_e')} never lowers {@html m('C_{eq}')}. <b>Homogeneity</b>: {@html m('C_{eq}(k\\,c) = k\\,C_{eq}(c)')}.</li>
       <li><b>Bounds</b>: {@html m('\\big(\\sum_e 1/c_e\\big)^{-1} \\le C_{eq} \\le \\sum_e c_e')}.</li>
       <li>
         <b>Tolerances</b>: if every part may vary by ±δ, monotonicity and homogeneity give {@html m('C_{eq} \\in [(1-\\delta)\\,C_{eq},\\,(1+\\delta)\\,C_{eq}]')}.
-        No topology removes that common scale error.
+        No topology removes that common worst-case scale error.
+      </li>
+      <li>
+        <b>Statistical spread</b>: if the parts' errors are independent with relative standard deviation {@html m('\\sigma')}, to first order
+        {@html m('\\sigma_{C}/C_{eq} \\approx \\sigma\\,\\sqrt{\\textstyle\\sum_e w_e^2}')}, which lies between {@html m('\\sigma/\\sqrt n')} (even sharing) and
+        {@html m('\\sigma')}. Here the topology <em>does</em> matter: sharing the energy among many parts averages their errors. It is shown for each solution.
+      </li>
+    </ul>
+    <h3>Limits of the model</h3>
+    <ul>
+      <li>
+        <b>DC voltage</b>: the "Voltage" column is the capacitive sharing, valid for AC or when charging from the uncharged state. At DC, in the long
+        run, the voltage across series capacitors is set by their <em>leakage resistances</em>; that is why balancing resistors are added.
+      </li>
+      <li><b>Dielectrics</b>: class II ceramics (X7R, Y5V…) lose much of their capacitance with applied DC voltage and with temperature.</li>
+      <li>
+        <b>Parasitics</b>: with targets of a few pF, the stray capacitance of tracks and wires (0.1–1 pF) is of the order of the error sought. At high
+        frequency series inductance and resistance (ESL, ESR) also count.
       </li>
     </ul>
 
@@ -280,7 +335,8 @@
     <p>
       A <b>series-parallel</b> (SP) network is built by combining sub-networks in series or in parallel. It has internal nodes, but it can always
       be reduced step by step with the two formulas above. Not every network is like that. The smallest one that cannot be reduced is the
-      <b>Wheatstone bridge</b>: five parts, with one of them between the two middle nodes.
+      <b>Wheatstone bridge</b>: five parts, with one of them between the two middle nodes. In fact Duffin (1965) proved that a two-terminal
+      network is series-parallel if and only if no Wheatstone bridge is embedded in it.
     </p>
     <figure class="fig">
       <div class="svg">{@html bridgeSvg}</div>
@@ -291,12 +347,13 @@
       </figcaption>
     </figure>
     <p>
-      To miss no network, CapAssigner uses the <b>SPQR decomposition</b>. Every two-terminal network in which each part stores charge becomes
-      2-connected once a virtual edge A–B is added. That network decomposes uniquely into nodes of three kinds: <em>series</em>,
+      To miss no network, CapAssigner uses the <b>SPQR decomposition</b>. Every two-terminal network in which each part lies on some simple
+      path between A and B (a structural condition, independent of the values) becomes 2-connected once a virtual edge A–B is added. That network decomposes uniquely into nodes of three kinds: <em>series</em>,
       <em>parallel</em> and <em>rigid</em>. A rigid node is a 3-connected graph whose edges are replaced by two-terminal sub-networks. It is
       therefore enough to know the small 3-connected graphs ("cores"). The app generates them by brute force with canonical labelling: all of
       those with up to 10 edges, which have at most 6 vertices (K₄, the wheel W₄, K₅−e, K₅, the prism, K₃,₃…). It then removes the A–B edge.
-      With them the search covers <b>every possible network up to 9 parts</b>.
+      With them the recurrence covers <b>every possible network up to 9 parts</b>. The web app uses up to 8 parts in "use all": with 9 distinct
+      parts there are millions of ways to share them among the edges of the cores.
     </p>
     {#if gallery.length}
       <div class="gallery">
@@ -310,8 +367,9 @@
       <p class="muted small">Catalogue generated by the engine itself: {gallery.length} cores (A and B are the terminals). Each edge can hold a capacitor or any sub-network.</p>
     {/if}
     <p>
-      Networks with parts that store no charge (hanging from a single node, or in a closed loop) are not considered: their value is that of a
-      smaller network, and in "use all" mode they would be cheating.
+      Parts that lie on no path between A and B (hanging from a single node, or in a closed loop) are excluded: they never carry charge whatever the
+      values, so their network is equivalent to a smaller one, and in "use all" mode they would be cheating. Networks in which a part carries no
+      charge only because of the values, such as the balanced bridge, are included.
     </p>
 
     <h2 id="s4">4. How it searches</h2>
@@ -325,9 +383,11 @@
     {@html m('V(S) = \\bigcup_{S = L \\uplus R} \\big\\{\\, a + b,\\ \\tfrac{ab}{a+b} \\;:\\; a \\in V(L),\\ b \\in V(R) \\,\\big\\} \\;\\cup\\; \\bigcup_{\\text{cores } \\mathcal R} \\big\\{\\, C_{eq}^{\\mathcal R}(x_1,\\dots,x_m) : x_i \\in V(S_i),\\ S = S_1 \\uplus \\dots \\uplus S_m \\big\\}', true)}
     <p>
       States are built from smallest to largest. Networks with the same value merge as they are generated, so repeated trees are never
-      enumerated. This matters: the number of distinct SP networks of {@html m('n')} different parts grows as 1, 2, 8, 52, 472, 5504, 78416…
-      (OEIS A006351), while there are only {@html m('2^n')} states. The value of a core with its edges filled in is computed by Kron reduction on at
-      most 6 nodes.
+      enumerated, such as the trees equivalent by commutativity and associativity that v1 listed. Each sub-result is also shared by all the states
+      that use it, and with repeated or rational values many networks coincide in value and merge. With distinct generic parts there are few
+      coincidences: the set of a state of {@html m('k')} parts has about as many values as there are distinct SP networks (1, 2, 8, 52, 472, 5504,
+      78416…, OEIS A006351). That is why memory grows fast and pruning is needed from about 9 parts (§5). The value of a core with its edges filled
+      in is computed by Kron reduction on at most 6 nodes.
     </p>
     <h3>4.2 Meet in the middle at the root</h3>
     <p>
@@ -350,7 +410,8 @@
 
     <h2 id="s5">5. Guarantees</h2>
     <p>
-      If every state fits in memory the search is <b>exhaustive</b>: no network has a smaller error than the first result. If they do not fit
+      If every state fits in memory the search is <b>exhaustive</b> within the chosen topology: no network has a smaller error than the first result
+      (two values within {@html m('10^{-12}')} relative are treated as equal). If they do not fit
       (from about 9 distinct parts), each state's values are bucketed on a logarithmic grid of width {@html m('\\varepsilon')} and one value per
       bucket is kept. Series, parallel and every core are monotone and 1-homogeneous in their inputs, hence non-expansive in log scale: if every
       input changes by at most a factor {@html m('e^{\\delta}')}, so does the output. By induction over the depth of the network, the optimal network
@@ -361,6 +422,11 @@
       That bound is shown in the summary ("search with a guaranteed bound"). It is a worst case; in practice the error found is usually many
       orders of magnitude smaller. A sub-network is never discarded for being "far from the target", because combined with another it could
       give the optimum.
+    </p>
+    <p>
+      Non-series-parallel cores also have an evaluation budget. If a state exceeds it, its cores are evaluated on copies of the child sets thinned
+      on the same grid, and that width is added to the bound. If even that does not fit with a useful width, those cores are not explored and the
+      summary says "partial search": the bound then only covers the networks that do not need them.
     </p>
 
     <h2 id="s6">6. Verification</h2>
@@ -396,7 +462,9 @@
 
   {#if i18n.lang === 'es'}
     <p>
-      Encajar A337517 prueba que el catálogo de núcleos y la recurrencia no se dejan ninguna red. Además, la batería de pruebas comprueba en redes
+      Encajar A337517 muestra que el catálogo de núcleos y la recurrencia no se dejan ninguna red con piezas iguales. Con piezas <em>distintas</em>, una
+      fuerza bruta independiente sobre todos los multigrafos de dos terminales de hasta 6 aristas da exactamente los mismos valores (6086 con 6
+      piezas); esa prueba detectaría repartos de piezas mal generados, que con piezas iguales pasarían inadvertidos. Además, la batería de pruebas comprueba en redes
       aleatorias: cotas, homogeneidad, invariancia al reetiquetar, monotonía de Rayleigh, dualidad serie↔paralelo, reciprocidad A↔B,
       transformación Y–Δ, puente equilibrado y la fórmula cerrada del puente. También comprueba que el encuentro en el medio da lo mismo que
       construir el estado completo, que la cota de la poda se cumple y que casos de referencia (ejercicios de clase y el puente de 1–5 pF) salen
@@ -414,7 +482,7 @@
       </table>
     </div>
     <p>
-      Límites actuales: 12 piezas en «usar todos»; núcleos no SP hasta 9 piezas; inventario hasta 6 piezas (con series E ya se alcanzan valores
+      Límites actuales: 12 piezas en «usar todos»; núcleos no SP hasta 8 piezas en «usar todos»; inventario hasta 6 piezas (con series E ya se alcanzan valores
       exactos). El cálculo usa un solo hilo. Antes de buscar, la aplicación estima el tiempo, y durante la búsqueda muestra el progreso y el tiempo
       restante.
     </p>
@@ -432,7 +500,9 @@
     </ul>
   {:else}
     <p>
-      Matching A337517 proves that the core catalogue and the recurrence miss no network. The test suite also checks, on random networks: bounds,
+      Matching A337517 shows that the core catalogue and the recurrence miss no network with equal parts. With <em>distinct</em> parts, an
+      independent brute force over every two-terminal multigraph with up to 6 edges gives exactly the same values (6086 with 6 parts); that test
+      would catch badly generated assignments of parts, which equal parts would hide. The test suite also checks, on random networks: bounds,
       homogeneity, relabelling invariance, Rayleigh monotonicity, series↔parallel duality, A↔B reciprocity, the Y–Δ transform, the balanced bridge
       and the bridge's closed form. It also checks that meet-in-the-middle gives the same result as building the full state, that the pruning bound
       holds, and that reference cases (classroom exercises and the 1–5 pF bridge) come out exact. All of this runs in continuous integration,
@@ -450,7 +520,7 @@
       </table>
     </div>
     <p>
-      Current limits: 12 parts in "use all"; non-SP cores up to 9 parts; inventory up to 6 parts (E-series already reach exact values). The
+      Current limits: 12 parts in "use all"; non-SP cores up to 8 parts in "use all"; inventory up to 6 parts (E-series already reach exact values). The
       computation uses a single thread. Before searching the app estimates the time, and while it runs it shows the progress and the time left.
     </p>
 
@@ -470,12 +540,16 @@
   <h2 id="s10">{i18n.lang === 'es' ? '10. Referencias' : '10. References'}</h2>
   <ul class="refs">
     <li>F. Dörfler, F. Bullo, “Kron Reduction of Graphs with Applications to Electrical Networks”, <em>IEEE Trans. Circuits Syst. I</em> 60(1), 2013.</li>
+    <li>R. J. Duffin, “Topology of series-parallel networks”, <em>J. Math. Anal. Appl.</em> 10(2), 303–313, 1965.</li>
+    <li>J. Riordan, C. E. Shannon, “The number of two-terminal series-parallel networks”, <em>J. Math. Phys.</em> 21, 83–93, 1942.</li>
+    <li>G. Kron, <em>Tensor Analysis of Networks</em>, Wiley, 1939.</li>
+    <li>S. Gaubert, J. Gunawardena, “The Perron–Frobenius theorem for homogeneous, monotone functions”, <em>Trans. AMS</em> 356, 4931–4950, 2004 (non-expansiveness used in §5).</li>
     <li>J. E. Hopcroft, R. E. Tarjan, “Dividing a graph into triconnected components”, <em>SIAM J. Comput.</em> 2(3), 1973.</li>
     <li>G. Di Battista, R. Tamassia, “On-line maintenance of triconnected components with SPQR-trees”, <em>Algorithmica</em> 15, 1996.</li>
     <li>S. Khan, “The bounds of the set of equivalent resistances of n equal resistors combined in series and in parallel”, arXiv:1004.3346.</li>
     <li>O. H. Ibarra, C. E. Kim, “Fast approximation algorithms for the knapsack and sum of subset problems”, <em>J. ACM</em> 22(4), 1975.</li>
     <li>J. W. S. Rayleigh, <em>The Theory of Sound</em> (monotonicity principle); P. G. Doyle, J. L. Snell, <em>Random Walks and Electric Networks</em>, MAA, 1984.</li>
-    <li>OEIS Foundation: <a href="https://oeis.org/A048211">A048211</a>, <a href="https://oeis.org/A174283">A174283</a>, <a href="https://oeis.org/A337517">A337517</a>, <a href="https://oeis.org/A006351">A006351</a>.</li>
+    <li>OEIS Foundation: <a href="https://oeis.org/A048211">A048211</a>, <a href="https://oeis.org/A174283">A174283</a>, <a href="https://oeis.org/A337517">A337517</a>, <a href="https://oeis.org/A006351">A006351</a>, <a href="https://oeis.org/A180414">A180414</a>.</li>
   </ul>
 </article>
 

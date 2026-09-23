@@ -50,6 +50,16 @@ describe('parseCapacitance', () => {
     expect(parseCapacitance('1/0pF').ok).toBe(false);
   });
 
+  it('tiny bare numbers are farads, as in v1 (review A2)', () => {
+    expect(farads('0.0000000000052')).toBeCloseTo(5.2e-12, 25);
+    expect(farads('0.0005')).toBeCloseTo(5e-4, 15);
+  });
+
+  it('exponent with a prefix (review M3)', () => {
+    expect(farads('1.5e3pF')).toBeCloseTo(1.5e-9, 20);
+    expect(farads('2e-1n')).toBeCloseTo(2e-10, 22);
+  });
+
   it('bare numbers use the default unit', () => {
     expect(farads('5.2', 'p')).toBeCloseTo(5.2e-12, 25);
     expect(farads('5.2', 'n')).toBeCloseTo(5.2e-9, 22);
@@ -84,6 +94,11 @@ describe('parseCapacitance', () => {
 describe('lists', () => {
   it('splits on whitespace, semicolons and non-decimal commas', () => {
     expect(splitList('1pF, 2pF;3pF\n4,7pF 5pF,6pF')).toEqual(['1pF', '2pF', '3pF', '4,7pF', '5pF', '6pF']);
+  });
+
+  it('a token with several commas is a list, one comma between digits a decimal', () => {
+    expect(parseList('1,2,3').values.map((v) => v.farads)).toEqual([1e-12, 2e-12, 3e-12]);
+    expect(parseList('1,5 2,2').values.map((v) => v.farads)).toEqual([1.5e-12, 2.2e-12]);
   });
 
   it('joins a unit typed after a space', () => {

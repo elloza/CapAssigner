@@ -60,7 +60,7 @@ export function estimate(req: SolveRequest): Estimate {
     // Equal values collapse states: 2^n_eff = Π(count + 1).
     const nEff = Math.log2(counts(req.values).reduce((p, c) => p * (c + 1), 1));
     let s = interp(SP_ALL, nEff);
-    if (cores && req.values.length <= 9) s *= interp(CORES_ALL, nEff);
+    if (cores && req.values.length <= 8) s *= interp(CORES_ALL, nEff);
     return { seconds: s * WASM_FACTOR, exhaustive: nEff <= 8.5 };
   }
   const k = req.maxParts ?? 4;

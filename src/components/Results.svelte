@@ -5,9 +5,10 @@
   import { EXAMPLES, type Built, type FormState } from '../lib/form';
   import type { SolveResponse } from '../lib/types';
   import SolutionDetail from './SolutionDetail.svelte';
+  import ErrorChart from './ErrorChart.svelte';
 
   interface Props {
-    result: { res: SolveResponse; ms: number; built: Built; form: FormState } | null;
+    result: { res: SolveResponse; ms: number; memoryMB: number; built: Built; form: FormState } | null;
     error: string | null;
     running: boolean;
     /** Share of the estimated work done (0–1). */
@@ -83,13 +84,21 @@
       </div>
     </div>
   {:else if result}
-    {@const { res, ms, built, form } = result}
+    {@const { res, ms, memoryMB, built, form } = result}
     {@const st = res.stats}
+    {@const scope = form.topo === 'sp' || built.coresDropped ? t().scopeSP : form.topo === 'bridge' ? t().scopeBridge : t().scopeAll}
+    {@const bound = formatPercent(st.boundRel).replace('+', '')}
     <div class="summary" class:ok={st.exhaustive} class:warn={!st.exhaustive} class:stale={running}>
-      <strong>{st.exhaustive ? t().exhaustive : t().approximate}</strong>
-      <span>{st.exhaustive ? t().exhaustiveHint : t().approximateHint(formatPercent(st.boundRel).replace('+', ''))}</span>
-      <span class="muted stats">{t().stats(st.states, st.entries, ms)}</span>
+      <strong>{st.exhaustive ? t().exhaustive : st.coresComplete ? t().approximate : t().partial}</strong>
+      <span>
+        {st.exhaustive ? t().exhaustiveHint(scope) : st.coresComplete ? t().approximateHint(scope, bound) : t().partialHint(bound)}
+      </span>
+      <span class="muted stats">{t().stats(st.states, st.entries, ms)} · {Math.round(memoryMB)} MB</span>
     </div>
+
+    {#if res.solutions.length > 1}
+      <ErrorChart solutions={res.solutions} tol={form.tol / 100} {selected} onselect={(i) => (selected = i)} />
+    {/if}
 
     <div class="table-wrap" class:stale={running}>
       <table>

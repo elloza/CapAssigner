@@ -6,6 +6,8 @@ import type { WorkerOut } from '../workers/solver.worker';
 export interface SolveResult {
   res: SolveResponse;
   ms: number;
+  /** Size of the WASM memory after the search (its peak so far). */
+  memoryMB: number;
 }
 
 export class SolverClient {
@@ -37,8 +39,13 @@ export class SolverClient {
         if (m.type === 'progress') onProgress?.(m.fraction);
         else {
           this.pending = null;
-          if (m.type === 'done') resolve({ res: m.res, ms: m.ms });
-          else reject(new Error(m.message));
+          if (m.type === 'done') resolve({ res: m.res, ms: m.ms, memoryMB: m.memoryMB });
+          else {
+            // The worker closes itself after an error; spawn a new one next time.
+            this.worker?.terminate();
+            this.worker = null;
+            reject(new Error(friendly(m.message)));
+          }
         }
       };
       worker.onerror = (e) => {
@@ -59,6 +66,11 @@ export class SolverClient {
     this.worker?.terminate();
     this.worker = null;
   }
+}
+
+/** Engine traps are cryptic; the usual cause is running out of memory. */
+function friendly(message: string): string {
+  return /unreachable|memory|allocation|out of bounds/i.test(message) ? 'out of memory' : message;
 }
 
 export class CancelledError extends Error {

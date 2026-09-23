@@ -7,7 +7,7 @@ import type { SolveRequest, SolveResponse } from '../lib/types';
 export type WorkerIn = { id: number; req: SolveRequest };
 export type WorkerOut =
   | { id: number; type: 'progress'; fraction: number }
-  | { id: number; type: 'done'; res: SolveResponse; ms: number }
+  | { id: number; type: 'done'; res: SolveResponse; ms: number; memoryMB: number }
   | { id: number; type: 'error'; message: string };
 
 const ready = init();
@@ -16,7 +16,7 @@ self.onmessage = async (ev: MessageEvent<WorkerIn>) => {
   const { id, req } = ev.data;
   const post = (m: WorkerOut) => self.postMessage(m);
   try {
-    await ready;
+    const wasm = await ready;
     const t0 = performance.now();
     let last = 0;
     const out = solve(JSON.stringify(req), (fraction: number) => {
@@ -26,8 +26,12 @@ self.onmessage = async (ev: MessageEvent<WorkerIn>) => {
         post({ id, type: 'progress', fraction });
       }
     });
-    post({ id, type: 'done', res: JSON.parse(out) as SolveResponse, ms: performance.now() - t0 });
+    // WASM memory only grows, so this is the peak reached so far.
+    const memoryMB = wasm.memory.buffer.byteLength / 2 ** 20;
+    post({ id, type: 'done', res: JSON.parse(out) as SolveResponse, ms: performance.now() - t0, memoryMB });
   } catch (e) {
     post({ id, type: 'error', message: e instanceof Error ? e.message : String(e) });
+    // A trap (e.g. out of memory) leaves the instance unusable: start afresh.
+    self.close();
   }
 };

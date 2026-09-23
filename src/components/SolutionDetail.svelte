@@ -23,9 +23,10 @@
   let hover: number | null = $state(null);
   let copied: string | null = $state(null);
 
+  // Inventory parts have no fixed label: name them by value, as in the table.
   const name = (k: number) => {
     const leaf = sol.leaves[k]!;
-    return leaf.index !== null ? built.names[leaf.index]! : `C${k + 1}`;
+    return leaf.index !== null ? built.names[leaf.index]! : formatCapacitance(leaf.value).replace(' ', '');
   };
   const value = (k: number) => formatCapacitance(sol.leaves[k]!.value);
   const leafExact = (k: number) => {
@@ -138,6 +139,13 @@
       <h3>{t().interval}</h3>
       <p class="mono">[{formatCapacitance(interval[0], 6)}, {formatCapacitance(interval[1], 6)}]</p>
       <p class="muted small">{t().intervalHint(`${form.partTol} %`)}</p>
+      {#if rows.length > 1}
+        {@const spread = Math.sqrt(rows.reduce((s, r) => s + r.e * r.e, 0))}
+        <p class="stat">
+          {t().statSpread}: <b class="mono">±{(form.partTol * spread).toFixed(2)} %</b>
+          <span class="muted small">({t().statHint(`${form.partTol} %`, spread.toFixed(3))})</span>
+        </p>
+      {/if}
     </section>
   </div>
 
@@ -272,6 +280,9 @@
   }
   .small {
     font-size: 0.82rem;
+  }
+  .stat {
+    margin-top: 0.5rem !important;
   }
   dl {
     display: grid;

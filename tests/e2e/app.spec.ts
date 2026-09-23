@@ -71,7 +71,7 @@ test.describe('CapAssigner in the browser', () => {
     const summary = page.locator('.summary');
     await expect(summary).toContainText(/exhaustiva|Exhaustive/, { timeout: 30_000 });
     const text = (await summary.innerText()).replace(/\s+/g, ' ');
-    const m = /([\d.,]+) (ms|s)$/.exec(text.trim());
+    const m = /([\d.,]+) (ms|s) · \d+ MB$/.exec(text.trim());
     expect(m).not.toBeNull();
     const ms = Number(m![1]!.replace(',', '.')) * (m![2] === 's' ? 1000 : 1);
     expect(ms).toBeLessThan(5000);

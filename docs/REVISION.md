@@ -211,3 +211,30 @@ Son importantes para su uso en laboratorio:
 - **Núcleos de más de 10 aristas** (grafos 3-conexos con 7 vértices) para completitud con más de 9 piezas.
 - **Benchmark abierto** con objetivos racionales exactos, medida de la brecha SP / no SP y estudio de la complejidad.
 - **Resistencias e inductancias**: misma matemática, intercambiando el papel de serie y paralelo.
+
+---
+
+## 7. Estado de los arreglos (actualización del 23-09-2026)
+
+| Id | Estado | Cómo se ha resuelto |
+|---|---|---|
+| **C1** | ✅ Resuelto | Los núcleos ya no se omiten en silencio. Hay un presupuesto global de evaluaciones de núcleo que se reparte entre los estados. Si un estado lo supera, sus núcleos se evalúan sobre conjuntos hijos adelgazados en la rejilla logarítmica y ese ancho se suma a la cota (sigue siendo válida). Si ni así cabe con un ancho útil (≤ 0,005), se omiten, `coresComplete = false` y la web muestra «búsqueda parcial». En «usar todos», los núcleos no SP se limitan a 8 piezas: con 9 distintas hay unos 17 M de descomposiciones solo en la raíz. Con ≤ 8 piezas la búsqueda es exhaustiva en unos 1,4 s. Test de regresión: `bridge_targets_stay_within_the_reported_bound_under_the_work_guard`. |
+| A1 | ✅ | El resumen indica el alcance (serie-paralelo / con puentes / cualquier topología) y distingue exhaustiva, con cota y parcial. |
+| A2 | ✅ | Un número sin unidad menor que 10⁻³ se lee en faradios (como en v1). Test en `units.test.ts`. |
+| A3 | ✅ | `boundRel` incluye el factor (1 + ε). |
+| M1 | ✅ | El rango de la rejilla se amplía con el ε ya aplicado a los hijos. |
+| M2 | ✅ | Parámetro `eps` eliminado de la API. |
+| M3 | ✅ | `1,2,3` es una lista; `1.5e3pF` se acepta. Tests añadidos. |
+| M4 | ✅ | El estimador conoce el límite de 8 piezas con núcleos. La ETA mezcla la estimación previa con el progreso medido. |
+| M5 | ✅ | Coma decimal en español (valores, porcentajes, tiempos, gráfica). |
+| M6 | ✅ | En inventario, el detalle nombra las piezas por su valor. |
+| M7 | ✅ | El presupuesto de valores depende de `navigator.deviceMemory` (6 M / 3 M / 1,5 M). La web muestra la memoria WASM usada y da un mensaje claro si se agota. Medido en el navegador: 12 piezas SP → 178 MB; inventario E24 × 4 décadas, K = 6 → 122 MB; 8 piezas con todas las topologías → 70 MB. |
+| M8 | ✅ | Acciones actualizadas (checkout v7, setup-node v7, pages v5…); Rust 1.98.1, wasm-pack 0.15.0 y Node 22 fijados (`rust-toolchain.toml`, `.nvmrc`). Los tests de `legacy/` siguen sin ejecutarse en CI. |
+| M9 | ⏳ Futuro | El cociente por automorfismos de los núcleos queda en líneas futuras. |
+| T1–T8 | ✅ | Teoría corregida: clase estructural de redes, alcance real de la DP, sensibilidad absoluta frente a relativa (Σw = 1), dispersión estadística (también en cada solución), límites del modelo físico y referencias (Duffin, Riordan–Shannon, Kron, Gaubert–Gunawardena, A180414). |
+
+**Otros arreglos hechos en esta ronda:**
+- SPICE exportado en modo inventario: los nombres de elemento no empezaban por `C` y no eran válidos.
+- Arena temporal de candidatos de núcleo compactada tras cada fusión (señalado por la auditoría externa: riesgo de agotar la memoria).
+- Validación de cocientes valor/objetivo fuera de 10^±150 (auditoría externa: 0/∞/NaN tras normalizar, subnormales en la rejilla).
+- Test **«el esquema es la red»**: la geometría del dibujo (cables, uniones T, condensadores) se convierte en circuito y se resuelve por análisis nodal; debe coincidir con la fórmula y ningún condensador puede quedar cortocircuitado. Cubre 300 redes SP aleatorias, los 20 núcleos y el caso del error de dibujo de v1 que envió el colega.

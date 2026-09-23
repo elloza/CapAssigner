@@ -54,8 +54,10 @@ pub struct Params {
     pub max_core_edges: usize,
     /// Budget of stored values across all states.
     pub max_entries: usize,
-    /// Most core evaluations per state; beyond it the state's cores are
-    /// skipped and the search is no longer exhaustive.
+    /// Budget of core evaluations for the whole search, shared out among the
+    /// states that have cores (unused shares roll over). A state over its
+    /// share evaluates its cores on child sets thinned on a coarser log grid,
+    /// so every topology is still explored and the bound stays valid.
     pub max_core_work: u64,
 }
 
@@ -174,9 +176,21 @@ pub struct Engine<'c, T: Num, S: Space> {
     pub p: Params,
     pub stats: Stats,
     progress: Option<Box<dyn FnMut(f64) + 'c>>,
-    /// Some state skipped its cores because of `max_core_work`.
+    /// Largest log-grid width used to thin child sets for core evaluation at
+    /// the root (states record theirs in `stats.eps_used`).
+    root_core_grid: std::cell::Cell<f64>,
+    /// Some state's cores were too expensive even when thinned and were skipped.
     cores_skipped: std::cell::Cell<bool>,
+    /// Core evaluations spent so far, and states still to evaluate cores.
+    core_spent: std::cell::Cell<u64>,
+    core_states_left: std::cell::Cell<usize>,
 }
+
+/// Never give a state fewer core evaluations than this.
+const MIN_CORE_SHARE: u64 = 100_000;
+/// Largest thinning grid (log width) for core evaluation; coarser than this the
+/// bound would be useless, so the state's cores are skipped and reported.
+const MAX_CORE_GRID: f64 = 0.005;
 
 fn combine<T: Num>(kind: u8, x: T, y: T) -> T {
     if kind == SERIES {
@@ -311,6 +325,20 @@ fn absorb<T: Num>(
     kept
 }
 
+/// After a merge, keep only the arena parts of the core candidates that
+/// survived, so the temporary arena stays proportional to the kept set rather
+/// than to every core evaluation.
+fn compact_cores<T: Num>(acc: &mut [Entry<T>], local: &mut Vec<(u32, u32)>, cores: &[&Core]) {
+    let mut kept = Vec::new();
+    for e in acc.iter_mut().filter(|e| e.kind == CORE) {
+        let m = cores[e.a as usize].m();
+        let off = e.b as usize;
+        e.b = kept.len() as u32;
+        kept.extend_from_slice(&local[off..off + m]);
+    }
+    *local = kept;
+}
+
 /// Visit every tuple of indices `idx[k] < lens[k]`.
 fn for_each_index_tuple(lens: &[usize], f: &mut dyn FnMut(&[usize])) {
     if lens.contains(&0) {
@@ -350,7 +378,10 @@ impl<'c, T: Num, S: Space> Engine<'c, T, S> {
             },
             p,
             progress: None,
+            root_core_grid: std::cell::Cell::new(0.0),
             cores_skipped: std::cell::Cell::new(false),
+            core_spent: std::cell::Cell::new(0),
+            core_states_left: std::cell::Cell::new(0),
         }
     }
 
@@ -375,6 +406,9 @@ impl<'c, T: Num, S: Space> Engine<'c, T, S> {
         let mut order: Vec<usize> = (0..n).filter(|&s| !root(s)).collect();
         order.sort_by_key(|&s| self.space.size(s));
         let total = order.len();
+        let min_core = self.cores.iter().map(|c| c.m()).min().unwrap_or(usize::MAX);
+        let with_cores = (0..n).filter(|&s| self.space.size(s) >= min_core).count();
+        self.core_states_left.set(with_cores);
         let weight = |s: usize| 5f64.powi(self.space.size(s) as i32);
         let weights: Vec<f64> = order.iter().map(|&s| weight(s)).collect();
         // The root queries run after this loop; count them so progress does
@@ -408,64 +442,148 @@ impl<'c, T: Num, S: Space> Engine<'c, T, S> {
     }
 
     /// True when every network was considered: no state was coarsened, no
-    /// merge beyond `eps`, and no state skipped its cores.
+    /// core evaluation used thinned child sets and none was skipped.
     pub fn exhaustive(&self) -> bool {
-        !self.stats.coarsened && !self.cores_skipped.get()
+        !self.stats.coarsened && self.root_core_grid.get() == 0.0 && self.cores_complete()
     }
 
-    /// Some state skipped its non-series-parallel cores (work guard).
-    pub fn cores_skipped(&self) -> bool {
-        self.cores_skipped.get()
+    /// Every enabled core was evaluated (possibly on thinned child sets, which
+    /// the bound covers). When false, the bound only covers the networks that
+    /// do not need the skipped cores.
+    pub fn cores_complete(&self) -> bool {
+        !self.cores_skipped.get()
     }
 
-    fn core_work(&self, s: usize) -> u64 {
-        let size = self.space.size(s);
-        let mut work = 0u64;
-        for core in self.cores.iter().filter(|c| c.m() <= size) {
-            self.space.for_each_composition(s, core.m(), &mut |comp| {
-                let p = comp.iter().fold(1u64, |acc, &t| {
-                    acc.saturating_mul(self.sets[t].as_deref().map_or(0, <[_]>::len) as u64)
-                });
-                work = work.saturating_add(p);
-            });
+    /// Log-width to use in the proven bound: the largest merge applied in any
+    /// state or in the root's core evaluation.
+    pub fn eps_bound(&self) -> f64 {
+        self.stats.eps_used.max(self.root_core_grid.get())
+    }
+
+    /// Indices of `set` kept on a log grid of width `g`: the first (smallest)
+    /// value of each bucket. Every dropped value is within a factor `e^g`.
+    fn thin(set: &[Entry<T>], g: f64) -> Vec<u32> {
+        if g == 0.0 {
+            return (0..set.len() as u32).collect();
         }
-        work
+        let mut kept = Vec::new();
+        let mut last = i64::MIN;
+        for (i, e) in set.iter().enumerate() {
+            let b = (e.v.to_f64().ln() / g).floor() as i64;
+            if b != last {
+                kept.push(i as u32);
+                last = b;
+            }
+        }
+        kept
     }
 
-    fn core_candidates(&self, s: usize, mut emit: impl FnMut(T, usize, &[(u32, u32)])) {
+    /// This state's share of the remaining core budget.
+    fn core_share(&self) -> u64 {
+        if self.p.max_core_work == u64::MAX {
+            return u64::MAX;
+        }
+        let left = self.p.max_core_work.saturating_sub(self.core_spent.get());
+        (left / self.core_states_left.get().max(1) as u64).max(MIN_CORE_SHARE)
+    }
+
+    /// Evaluate every core over every decomposition of `s`. If that exceeds
+    /// the state's share of the core budget, the child value sets are thinned
+    /// on a log grid of width `g` (the smallest value of each bucket is kept),
+    /// growing `g` until the work fits or every child is down to one value.
+    /// Returns `g` (0 when the children were used in full).
+    fn core_candidates(&self, s: usize, mut emit: impl FnMut(T, usize, &[(u32, u32)])) -> f64 {
         let size = self.space.size(s);
         if self.cores.iter().all(|c| c.m() > size) {
-            return;
+            return 0.0;
         }
-        if self.p.max_core_work < u64::MAX && self.core_work(s) > self.p.max_core_work {
-            self.cores_skipped.set(true);
-            return;
+        // Decompositions are re-enumerated on each pass rather than stored:
+        // with 9 distinct parts there can be millions of them.
+        let usable: Vec<usize> = (0..self.cores.len())
+            .filter(|&ci| self.cores[ci].m() <= size)
+            .collect();
+        let each_comp = |f: &mut dyn FnMut(usize, &[usize])| {
+            for &ci in &usable {
+                self.space
+                    .for_each_composition(s, self.cores[ci].m(), &mut |comp| f(ci, comp));
+            }
+        };
+        // The work of a decomposition only depends on the multiset of its
+        // child states, so count decompositions per multiset once.
+        let mut groups: std::collections::HashMap<Vec<usize>, u64> =
+            std::collections::HashMap::new();
+        each_comp(&mut |_, comp| {
+            let mut key = comp.to_vec();
+            key.sort_unstable();
+            *groups.entry(key).or_insert(0) += 1;
+        });
+        let mut children: Vec<usize> = groups.keys().flatten().copied().collect();
+        children.sort_unstable();
+        children.dedup();
+        let set = |t: usize| self.sets[t].as_deref().expect("sub-state built");
+        let thin_all = |g: f64| -> std::collections::HashMap<usize, Vec<u32>> {
+            children
+                .iter()
+                .map(|&t| (t, Self::thin(set(t), g)))
+                .collect()
+        };
+        let work = |kept: &std::collections::HashMap<usize, Vec<u32>>| -> u64 {
+            groups.iter().fold(0u64, |total, (key, &count)| {
+                let p = key
+                    .iter()
+                    .fold(count, |acc, t| acc.saturating_mul(kept[t].len() as u64));
+                total.saturating_add(p)
+            })
+        };
+        let share = self.core_share();
+        let mut g = 0.0;
+        let mut kept = thin_all(g);
+        if work(&kept) > share {
+            g = 1e-6;
+            loop {
+                kept = thin_all(g);
+                let singletons = kept.values().all(|k| k.len() == 1);
+                if work(&kept) <= share || singletons {
+                    break;
+                }
+                g *= 4.0;
+            }
+            if g > MAX_CORE_GRID {
+                self.cores_skipped.set(true);
+                self.core_states_left
+                    .set(self.core_states_left.get().saturating_sub(1));
+                return 0.0;
+            }
         }
+
+        let mut spent = 0u64;
         let mut w: Vec<T> = Vec::new();
         let mut parts: Vec<(u32, u32)> = Vec::new();
-        for (ci, core) in self.cores.iter().enumerate() {
+        each_comp(&mut |ci, comp| {
+            let core = self.cores[ci];
             let m = core.m();
-            if m > size {
-                continue;
-            }
-            self.space.for_each_composition(s, m, &mut |comp| {
-                let sets: Vec<&[Entry<T>]> = comp
-                    .iter()
-                    .map(|&t| self.sets[t].as_deref().expect("sub-state built"))
-                    .collect();
-                let lens: Vec<usize> = sets.iter().map(|v| v.len()).collect();
+            {
+                let sets: Vec<&[Entry<T>]> = comp.iter().map(|&t| set(t)).collect();
+                let idxs: Vec<&[u32]> = comp.iter().map(|t| kept[t].as_slice()).collect();
+                let lens: Vec<usize> = idxs.iter().map(|v| v.len()).collect();
                 for_each_index_tuple(&lens, &mut |idx| {
                     w.clear();
                     parts.clear();
                     for k in 0..m {
-                        w.push(sets[k][idx[k]].v);
-                        parts.push((comp[k] as u32, idx[k] as u32));
+                        let i = idxs[k][idx[k]];
+                        w.push(sets[k][i as usize].v);
+                        parts.push((comp[k] as u32, i));
                     }
                     let v = laplace::ceq(core.nv, 0, 1, &core.edges, &w);
+                    spent += 1;
                     emit(v, ci, &parts);
                 });
-            });
-        }
+            }
+        });
+        self.core_spent.set(self.core_spent.get() + spent);
+        self.core_states_left
+            .set(self.core_states_left.get().saturating_sub(1));
+        g
     }
 
     fn build(&mut self, s: usize, cap: usize) -> Result<(), String> {
@@ -473,6 +591,7 @@ impl<'c, T: Num, S: Space> Engine<'c, T, S> {
         let mut chunk: Vec<Entry<T>> = Vec::new();
         let mut local: Vec<(u32, u32)> = Vec::new();
         let mut grid = 0.0f64;
+        let mut core_grid = 0.0f64;
         let mut produced = 0u64;
         let eps = self.p.eps;
         if self.space.size(s) == 1 {
@@ -517,7 +636,7 @@ impl<'c, T: Num, S: Space> Engine<'c, T, S> {
                     }
                 }
             }
-            self.core_candidates(s, |v, ci, parts| {
+            core_grid = self.core_candidates(s, |v, ci, parts| {
                 chunk.push(Entry {
                     v,
                     kind: CORE,
@@ -529,12 +648,13 @@ impl<'c, T: Num, S: Space> Engine<'c, T, S> {
                 if chunk.len() >= CHUNK {
                     produced += chunk.len() as u64;
                     acc = absorb(std::mem::take(&mut acc), &mut chunk, eps, cap, &mut grid);
+                    compact_cores(&mut acc, &mut local, &self.cores);
                 }
             });
         }
         produced += chunk.len() as u64;
         let kept = absorb(acc, &mut chunk, eps, cap, &mut grid);
-        self.finish_state(s, kept, &local, grid, produced)
+        self.finish_state(s, kept, &local, grid + core_grid, produced)
     }
 
     /// Move a state's kept core parts into the arena and account for it.
@@ -589,7 +709,11 @@ impl<'c, T: Num, S: Space> Engine<'c, T, S> {
             lo = lo.min(lv[0].v.series(rv[0].v).to_f64());
             hi = hi.max(lv[lv.len() - 1].v.parallel(rv[rv.len() - 1].v).to_f64());
         }
-        let grid = LogGrid::new(lo, hi, cap);
+        // The children's extreme values are representatives, possibly up to
+        // their merge width away from the true extremes; widen the range so
+        // that no candidate (in particular a core value) is clamped.
+        let margin = (2.0 * self.stats.eps_used + 1e-9).exp();
+        let grid = LogGrid::new(lo / margin, hi * margin, cap);
         let mut buckets: Vec<Option<Entry<T>>> = vec![None; grid.len()];
         let mut local: Vec<(u32, u32)> = Vec::new();
         let mut produced = 0u64;
@@ -616,7 +740,7 @@ impl<'c, T: Num, S: Space> Engine<'c, T, S> {
                 produced += 2 * (rv.len() - j0) as u64;
             }
         }
-        self.core_candidates(s, |v, ci, parts| {
+        let core_grid = self.core_candidates(s, |v, ci, parts| {
             produced += 1;
             let slot = &mut buckets[grid.bucket(v.to_f64())];
             if slot.is_none() {
@@ -631,7 +755,7 @@ impl<'c, T: Num, S: Space> Engine<'c, T, S> {
             }
         });
         let kept: Vec<Entry<T>> = buckets.into_iter().flatten().collect();
-        self.finish_state(s, kept, &local, grid.eps(), produced)
+        self.finish_state(s, kept, &local, grid.eps() + core_grid, produced)
     }
 
     fn rel_err(v: T, target: f64) -> f64 {
@@ -757,7 +881,7 @@ impl<'c, T: Num, S: Space> Engine<'c, T, S> {
             }
         }
 
-        self.core_candidates(s, |v, ci, parts| {
+        let g = self.core_candidates(s, |v, ci, parts| {
             let err = Self::rel_err(v, tf);
             if top.wants(err) {
                 let e = Entry {
@@ -777,6 +901,9 @@ impl<'c, T: Num, S: Space> Engine<'c, T, S> {
                 });
             }
         });
+        if g > self.root_core_grid.get() {
+            self.root_core_grid.set(g);
+        }
     }
 
     fn net_of(&self, s: usize, e: &Entry<T>, root_parts: Option<&[(u32, u32)]>) -> Net {

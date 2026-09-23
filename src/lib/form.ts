@@ -46,12 +46,22 @@ export const DEFAULT_FORM: FormState = {
 };
 
 /** Largest "use all" problem for which non-series-parallel cores are explored. */
-export const MAX_CORE_PARTS = 9;
+export const MAX_CORE_PARTS = 8;
 export const MAX_ALL_PARTS = 12;
 /** Beyond 6 parts an E-series already hits targets exactly and time grows fast. */
 export const MAX_INVENTORY_PARTS = 6;
 /** Stored-value budget for inventory searches (smaller sets, much faster). */
 const INVENTORY_BUDGET = 1_000_000;
+
+/**
+ * Stored-value budget for "use all" searches, scaled to the device: each
+ * value takes ~24 bytes plus working buffers, so 6 M values peak at a few
+ * hundred MB of WASM memory, too much for small phones.
+ */
+export function memoryBudget(): number {
+  const gb = typeof navigator !== 'undefined' ? ((navigator as { deviceMemory?: number }).deviceMemory ?? 8) : 8;
+  return gb >= 8 ? 6_000_000 : gb >= 4 ? 3_000_000 : 1_500_000;
+}
 
 export const EXAMPLES: { id: string; es: string; en: string; form: Partial<FormState> }[] = [
   {
@@ -188,6 +198,7 @@ export function buildRequest(f: FormState): Built {
     target: tr.value.farads,
     topK: f.topK,
     maxCoreEdges: coresDropped ? 0 : coreEdges,
+    maxEntries: memoryBudget(),
     ...(f.mode === 'inventory'
       ? {
           maxParts: f.maxParts,
