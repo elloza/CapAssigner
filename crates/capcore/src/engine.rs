@@ -413,6 +413,11 @@ impl<'c, T: Num, S: Space> Engine<'c, T, S> {
         !self.stats.coarsened && !self.cores_skipped.get()
     }
 
+    /// Some state skipped its non-series-parallel cores (work guard).
+    pub fn cores_skipped(&self) -> bool {
+        self.cores_skipped.get()
+    }
+
     fn core_work(&self, s: usize) -> u64 {
         let size = self.space.size(s);
         let mut work = 0u64;
