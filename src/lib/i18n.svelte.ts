@@ -1,6 +1,7 @@
 // Bilingual strings (Spanish by default) and the reactive language setting.
 
-import { localNumber, setDecimalComma } from './units';
+import { formatCapacitance as fc, localNumber, setDecimalComma } from './units';
+import type { Check } from './form';
 
 export type Lang = 'es' | 'en';
 
@@ -121,6 +122,24 @@ const es = {
   theme: 'Tema',
   offline: 'Todo se calcula en tu navegador (Rust → WebAssembly). No se envía ningún dato.',
   changelog: 'Novedades',
+  check: (c: Check): string => {
+    switch (c.code) {
+      case 'unreachableLow':
+        return `Objetivo inalcanzable: ninguna red baja de ${fc(c.min)} (todo en serie). Se mostrarán las más cercanas.`;
+      case 'unreachableHigh':
+        return `Objetivo inalcanzable: ninguna red supera ${fc(c.max)} (todo en paralelo). Se mostrarán las más cercanas.`;
+      case 'spread':
+        return `Los valores difieren en unas ${c.decades} décadas. En serie mandan los pequeños y en paralelo los grandes; ¿están bien las unidades?`;
+      case 'tiny':
+        return `${fc(c.value)} es menor que las capacidades parásitas típicas (0,1–1 pF): el montaje real no lo respetará.`;
+      case 'huge':
+        return `${fc(c.value)} es un supercondensador. ¿Querías otra unidad (µF, nF)? Revisa también la unidad por defecto.`;
+      case 'ratio':
+        return 'El objetivo y los valores difieren en más de 150 órdenes de magnitud: revisa las unidades.';
+      case 'classes':
+        return `Con existencias limitadas se admiten como mucho 32 valores distintos (hay ${c.count}). Quita valores o deja la cantidad ilimitada.`;
+    }
+  },
   duration,
 };
 
@@ -237,6 +256,24 @@ const en: Strings = {
   theme: 'Theme',
   offline: 'Everything runs in your browser (Rust → WebAssembly). No data leaves it.',
   changelog: 'Changelog',
+  check: (c: Check): string => {
+    switch (c.code) {
+      case 'unreachableLow':
+        return `Unreachable target: no network goes below ${fc(c.min)} (all in series). The closest ones will be shown.`;
+      case 'unreachableHigh':
+        return `Unreachable target: no network goes above ${fc(c.max)} (all in parallel). The closest ones will be shown.`;
+      case 'spread':
+        return `The values differ by about ${c.decades} decades. Small parts dominate in series and large ones in parallel; are the units right?`;
+      case 'tiny':
+        return `${fc(c.value)} is below typical stray capacitance (0.1–1 pF): a real build will not honour it.`;
+      case 'huge':
+        return `${fc(c.value)} is a supercapacitor. Did you mean another unit (µF, nF)? Check the default unit too.`;
+      case 'ratio':
+        return 'The target and the values differ by more than 150 orders of magnitude: check the units.';
+      case 'classes':
+        return `Limited stock accepts at most 32 distinct values (there are ${c.count}). Remove values or make the quantity unlimited.`;
+    }
+  },
   duration,
 };
 

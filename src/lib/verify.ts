@@ -36,7 +36,7 @@ export function verifySolution(
   if (rel(byTree) > REL_TOL) problems.push(`structural C_eq ${byTree} ≠ ${sol.value}`);
   if (Math.abs(2 * analysis.energy - analysis.ceq) > REL_TOL * analysis.ceq)
     problems.push('energy balance violated');
-  if (analysis.residual > 1e-9) problems.push('charge conservation violated');
+  if (analysis.residual > 1) problems.push('charge conservation violated');
   if (g.edges.length !== sol.parts) problems.push('part count mismatch');
 
   let exact: Frac | null = null;

@@ -78,6 +78,8 @@
       const { res, ms, memoryMB } = await client.run(b.req, (f) => (progress = f));
       result = { res, ms, memoryMB, built: b, form: { ...form } };
     } catch (e) {
+      // Never leave the previous problem's results under a new error.
+      result = null;
       const msg = e instanceof Error ? e.message : String(e);
       error = e instanceof CancelledError ? t().cancelled : msg === 'out of memory' ? t().outOfMemory : msg;
     } finally {

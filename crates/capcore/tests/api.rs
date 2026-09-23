@@ -369,3 +369,21 @@ fn core9_survey() {
         );
     }
 }
+
+/// Regression (user report, v2.1.0): values spanning ~10 decades (10 nF … 55 F)
+/// made the internal graph check fail by cancellation in the Kron reduction.
+#[test]
+fn huge_value_spread_passes_the_consistency_check() {
+    let caps = [
+        10e-9, 10e-9, 10e-9, 10e-9, 10e-9, 55.4, 3.0, 10e-9, 10e-9, 55.4, 3.0,
+    ];
+    for cores in [0, 9] {
+        let r = Request {
+            max_core_edges: cores,
+            top_k: 20,
+            ..req(Mode::All, &caps, 10.4e-9)
+        };
+        let res = run(&r);
+        assert!(!res.solutions.is_empty());
+    }
+}

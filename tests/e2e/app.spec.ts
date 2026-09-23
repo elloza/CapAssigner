@@ -77,6 +77,14 @@ test.describe('CapAssigner in the browser', () => {
     expect(ms).toBeLessThan(5000);
   });
 
+  test('values spanning ten decades are solved and verified (user report)', async ({ page }) => {
+    const caps = '10nF+10nF+10nF+10nF+10nF+55.4F+3F+10nF+10nF+55.4F+3F';
+    await page.goto(`./#caps=${caps}&target=10.4nF&topo=sp`);
+    await expect(page.locator('.summary')).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('.note.bad')).toHaveCount(0);
+    await expect(page.locator('.detail')).toContainText(/Verificado|Verified/);
+  });
+
   test('works at phone width without horizontal scrolling', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 800 });
     await page.goto('./#caps=3pF+2pF+3pF+1pF');

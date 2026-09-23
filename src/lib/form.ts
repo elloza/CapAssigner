@@ -140,6 +140,56 @@ export function parseInventory(text: string, unit: Prefix): { items: InventoryIt
   return { items, errors };
 }
 
+/**
+ * Sanity checks on the input, run before searching. `warn` findings are
+ * advice (the search still runs); `block` ones stop it with an explanation.
+ */
+export type Check =
+  | { level: 'warn'; code: 'unreachableLow' | 'unreachableHigh'; min: number; max: number }
+  | { level: 'warn'; code: 'spread'; decades: number }
+  | { level: 'warn'; code: 'tiny'; value: number }
+  | { level: 'warn'; code: 'huge'; value: number }
+  | { level: 'block'; code: 'ratio' }
+  | { level: 'block'; code: 'classes'; count: number };
+
+/** Below this a "capacitor" is smaller than typical stray capacitance. */
+const TINY = 1e-13;
+/** Above this it is a supercapacitor: probably a unit slip. */
+const HUGE = 1;
+/** More decades than this between parts is almost surely a unit mistake. */
+const SPREAD_DECADES = 6;
+/** Largest number of distinct values the engine accepts with limited stock. */
+const MAX_LIMITED_CLASSES = 32;
+
+export function sanityChecks(
+  mode: Mode,
+  values: number[],
+  target: number,
+  maxParts: number,
+  limitedStock: boolean,
+): Check[] {
+  const out: Check[] = [];
+  if (values.length === 0 || !(target > 0)) return out;
+  const lo = Math.min(...values);
+  const hi = Math.max(...values);
+  if (values.some((v) => !(v / target >= 1e-150 && v / target <= 1e150))) out.push({ level: 'block', code: 'ratio' });
+  const distinct = new Set(values).size;
+  if (mode === 'inventory' && limitedStock && distinct > MAX_LIMITED_CLASSES)
+    out.push({ level: 'block', code: 'classes', count: distinct });
+  // Reachable range: every network lies between "all in series" and "all in parallel".
+  const [min, max] =
+    mode === 'all'
+      ? [1 / values.reduce((s, v) => s + 1 / v, 0), values.reduce((s, v) => s + v, 0)]
+      : [lo / maxParts, hi * maxParts];
+  if (target < min * (1 - 1e-12)) out.push({ level: 'warn', code: 'unreachableLow', min, max });
+  else if (target > max * (1 + 1e-12)) out.push({ level: 'warn', code: 'unreachableHigh', min, max });
+  const decades = Math.log10(hi / lo);
+  if (decades > SPREAD_DECADES) out.push({ level: 'warn', code: 'spread', decades: Math.round(decades) });
+  if (lo < TINY) out.push({ level: 'warn', code: 'tiny', value: lo });
+  if (hi > HUGE) out.push({ level: 'warn', code: 'huge', value: hi });
+  return out;
+}
+
 export interface Built {
   req: SolveRequest | null;
   errors: ParseError[];
@@ -151,6 +201,7 @@ export interface Built {
   /** Cores were requested but switched off for size. */
   coresDropped: boolean;
   tooMany: boolean;
+  checks: Check[];
 }
 
 export function buildRequest(f: FormState): Built {
@@ -189,8 +240,18 @@ export function buildRequest(f: FormState): Built {
     names,
     coresDropped,
     tooMany,
+    checks: tr.ok
+      ? sanityChecks(
+          f.mode,
+          values.map((v) => v.farads),
+          tr.value.farads,
+          f.maxParts,
+          f.mode === 'inventory' && stock.some((c) => c !== null),
+        )
+      : [],
   };
-  if (errors.length || !tr.ok || values.length === 0 || tooMany) return { req: null, ...base };
+  const blocked = base.checks.some((c) => c.level === 'block');
+  if (errors.length || !tr.ok || values.length === 0 || tooMany || blocked) return { req: null, ...base };
   const limited = stock.some((c) => c !== null);
   const req: SolveRequest = {
     mode: f.mode,

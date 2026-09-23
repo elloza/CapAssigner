@@ -153,3 +153,13 @@ describe('bridge-5 golden case', () => {
     }
   });
 });
+
+describe('huge value spread (user report, v2.1.0)', () => {
+  it('10 nF next to 55 F: engine and independent oracle agree', () => {
+    const values = [10e-9, 10e-9, 10e-9, 10e-9, 10e-9, 55.4, 3, 10e-9, 10e-9, 55.4, 3];
+    for (const maxCoreEdges of [0, 9]) {
+      const req: SolveRequest = { mode: 'all', values, target: 10.4e-9, topK: 20, maxCoreEdges };
+      checkResponse(req, solve(req));
+    }
+  });
+});

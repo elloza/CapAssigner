@@ -157,6 +157,11 @@
   {#if built.errors.length}
     <p class="err" role="alert">{t().errorsIn}: <span class="mono">{built.errors.map(errText).join(', ')}</span></p>
   {/if}
+  {#each built.checks as c, i (i)}
+    <p class={c.level === 'block' ? 'err' : 'warn'} role={c.level === 'block' ? 'alert' : 'status'}>
+      {c.level === 'block' ? '⛔' : '⚠'} {t().check(c)}
+    </p>
+  {/each}
   {#if built.tooMany}
     <p class="err" role="alert">max {form.mode === 'all' ? MAX_ALL_PARTS : MAX_INVENTORY_PARTS}</p>
   {/if}
@@ -315,6 +320,14 @@
     border-radius: 8px;
     padding: 0.45rem 0.6rem;
     font-size: 0.88rem;
+  }
+  .warn {
+    margin: 0;
+    color: var(--warn);
+    background: var(--warn-soft);
+    border-radius: 8px;
+    padding: 0.45rem 0.6rem;
+    font-size: 0.86rem;
   }
   .estimate {
     margin: 0;

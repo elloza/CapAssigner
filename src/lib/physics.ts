@@ -26,7 +26,9 @@ export interface Analysis {
   charges: number[];
   /** Stored energy for 1 V applied, ½·Σ c·Δv². */
   energy: number;
-  /** Largest charge imbalance at an internal node, relative to C_eq. */
+  /** Largest charge imbalance at an internal node divided by what is allowed:
+   *  1e-9·C_eq plus the rounding of the potentials (~ε) amplified by the
+   *  node's capacitances. Charge is conserved when this is ≤ 1. */
   residual: number;
 }
 
@@ -147,23 +149,69 @@ function terminalCharge<T>(F: Field<T>, a: number, pot: T[], edges: WEdge<T>[]):
   return q;
 }
 
+/**
+ * Floating-point nodal analysis in GTH form (Grassmann–Taksar–Heyman): only the
+ * couplings g_ij ≥ 0 are kept, eliminating node k adds g_ik·g_kj/Σg_k to the
+ * others, and afterwards each eliminated node's potential is the weighted mean
+ * of its neighbours at elimination time. No subtraction anywhere, so values
+ * spanning many decades (10 nF next to 55 F) stay accurate to rounding.
+ */
+function gth(n: number, a: number, b: number, edges: WEdge<number>[]): { ceq: number; pot: number[] } {
+  const g = Array.from({ length: n }, () => new Array<number>(n).fill(0));
+  for (const { u, v, c } of edges) {
+    if (u === v) continue;
+    g[u]![v]! += c;
+    g[v]![u]! += c;
+  }
+  const live = reachable(n, edges, [a, b]);
+  const alive = live.slice();
+  const order: { k: number; row: number[]; p: number }[] = [];
+  for (let k = 0; k < n; k++) {
+    if (k === a || k === b || !live[k]) continue;
+    alive[k] = false;
+    let p = 0;
+    for (let j = 0; j < n; j++) if (alive[j]) p += g[k]![j]!;
+    order.push({ k, row: g[k]!.map((x, j) => (alive[j] ? x : 0)), p });
+    if (p <= 0) continue;
+    for (let i = 0; i < n; i++) {
+      if (!alive[i] || g[i]![k]! <= 0) continue;
+      const f = g[i]![k]! / p;
+      for (let j = 0; j < n; j++) if (alive[j] && j !== i && g[k]![j]! > 0) g[i]![j]! += f * g[k]![j]!;
+    }
+  }
+  const pot = new Array<number>(n).fill(0);
+  pot[a] = 1;
+  for (let t = order.length - 1; t >= 0; t--) {
+    const { k, row, p } = order[t]!;
+    if (p > 0) pot[k] = row.reduce((s, x, j) => s + x * pot[j]!, 0) / p;
+  }
+  return { ceq: g[a]![b]!, pot };
+}
+
 export function analyze(n: number, a: number, b: number, edges: WEdge<number>[]): Analysis {
-  const pot = potentials(F64, n, a, b, edges);
-  const ceq = terminalCharge(F64, a, pot, edges);
+  const { ceq, pot } = gth(n, a, b, edges);
   const voltages = edges.map((e) => pot[e.u]! - pot[e.v]!);
   const charges = edges.map((e, i) => e.c * voltages[i]!);
   const energy = 0.5 * edges.reduce((s, e, i) => s + e.c * voltages[i]! ** 2, 0);
+  // Charge balance at internal nodes. Each potential is known to a few ε, which
+  // a capacitance c turns into an absolute charge error of about c·ε: with
+  // 55 F next to 10 nF that is far above 1e-9·C_eq, and is not a violation.
   const net = new Array<number>(n).fill(0);
+  const capSum = new Array<number>(n).fill(0);
   edges.forEach((e, i) => {
     net[e.u]! += charges[i]!;
     net[e.v]! -= charges[i]!;
+    capSum[e.u]! += e.c;
+    capSum[e.v]! += e.c;
   });
   let residual = 0;
   const live = reachable(n, edges, [a, b]);
   for (let i = 0; i < n; i++) {
-    if (i !== a && i !== b && live[i]) residual = Math.max(residual, Math.abs(net[i]!));
+    if (i === a || i === b || !live[i]) continue;
+    const allowed = 1e-9 * ceq + 16 * Number.EPSILON * capSum[i]!;
+    residual = Math.max(residual, Math.abs(net[i]!) / allowed);
   }
-  return { ceq, potentials: pot, voltages, charges, energy, residual: ceq > 0 ? residual / ceq : residual };
+  return { ceq, potentials: pot, voltages, charges, energy, residual };
 }
 
 export function ceqExact(n: number, a: number, b: number, edges: WEdge<Frac>[]): Frac {

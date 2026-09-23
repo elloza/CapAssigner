@@ -3,9 +3,14 @@
 //! The nodal equations of a capacitor network are `L·V = Q`, with `L` the
 //! capacitance-weighted graph Laplacian. Eliminating every internal node (the
 //! Schur complement onto the terminals, a.k.a. Kron reduction) leaves a 2×2
-//! Laplacian whose off-diagonal entry is `−C_eq`. Elimination keeps the matrix a
-//! Laplacian (non-positive off-diagonals, positive pivots), so no pivoting is
-//! needed and the same code is exact over rationals.
+//! Laplacian whose off-diagonal entry is `−C_eq`.
+//!
+//! The reduction is done in the GTH form (Grassmann–Taksar–Heyman, 1985): only
+//! the off-diagonal couplings `g_ij = −L_ij ≥ 0` are stored, each pivot is the
+//! sum of the node's couplings, and eliminating node `k` only *adds*
+//! `g_ik·g_kj / Σ_j g_kj` to the other couplings. There are no subtractions, so
+//! no cancellation: the result stays accurate to rounding even when the values
+//! span many decades (e.g. 10 nF next to 55 F), and it is exact over rationals.
 
 use crate::num::Num;
 
@@ -18,15 +23,12 @@ pub fn ceq<T: Num>(nv: usize, a: usize, b: usize, edges: &[(usize, usize)], w: &
     assert!(nv <= MAX_V && a < nv && b < nv && a != b);
     assert_eq!(edges.len(), w.len());
     let z = T::zero();
-    let mut l = [[z; MAX_V]; MAX_V];
+    let mut g = [[z; MAX_V]; MAX_V];
     for (&(u, v), &c) in edges.iter().zip(w) {
-        if u == v {
-            continue;
+        if u != v {
+            g[u][v] = g[u][v].add(c);
+            g[v][u] = g[v][u].add(c);
         }
-        l[u][u] = l[u][u].add(c);
-        l[v][v] = l[v][v].add(c);
-        l[u][v] = l[u][v].sub(c);
-        l[v][u] = l[v][u].sub(c);
     }
     let mut alive = [false; MAX_V];
     alive[..nv].fill(true);
@@ -35,35 +37,38 @@ pub fn ceq<T: Num>(nv: usize, a: usize, b: usize, edges: &[(usize, usize)], w: &
             continue;
         }
         alive[k] = false;
-        let p = l[k][k];
+        let mut p = z;
+        for j in 0..nv {
+            if alive[j] {
+                p = p.add(g[k][j]);
+            }
+        }
         if p <= z {
             continue;
         }
         for i in 0..nv {
-            if !alive[i] || l[i][k] == z {
+            if !alive[i] || g[i][k] <= z {
                 continue;
             }
-            let f = l[i][k].div(p);
+            let f = g[i][k].div(p);
             for j in 0..nv {
-                if alive[j] && l[k][j] != z {
-                    l[i][j] = l[i][j].sub(f.mul(l[k][j]));
+                if alive[j] && j != i && g[k][j] > z {
+                    g[i][j] = g[i][j].add(f.mul(g[k][j]));
                 }
             }
         }
     }
-    z.sub(l[a][b])
+    g[a][b]
 }
 
 /// Same reduction for graphs of any size (heap-allocated, `O(nv³)`), used to
 /// double-check reconstructed networks.
 pub fn ceq_graph(nv: usize, a: usize, b: usize, edges: &[(usize, usize, f64)]) -> f64 {
-    let mut l = vec![vec![0.0f64; nv]; nv];
+    let mut g = vec![vec![0.0f64; nv]; nv];
     for &(u, v, c) in edges {
         if u != v {
-            l[u][u] += c;
-            l[v][v] += c;
-            l[u][v] -= c;
-            l[v][u] -= c;
+            g[u][v] += c;
+            g[v][u] += c;
         }
     }
     let mut alive = vec![true; nv];
@@ -72,23 +77,23 @@ pub fn ceq_graph(nv: usize, a: usize, b: usize, edges: &[(usize, usize, f64)]) -
             continue;
         }
         alive[k] = false;
-        let p = l[k][k];
+        let p: f64 = (0..nv).filter(|&j| alive[j]).map(|j| g[k][j]).sum();
         if p <= 0.0 {
             continue;
         }
         for i in 0..nv {
-            if !alive[i] || l[i][k] == 0.0 {
+            if !alive[i] || g[i][k] <= 0.0 {
                 continue;
             }
-            let f = l[i][k] / p;
+            let f = g[i][k] / p;
             for j in 0..nv {
-                if alive[j] && l[k][j] != 0.0 {
-                    l[i][j] -= f * l[k][j];
+                if alive[j] && j != i && g[k][j] > 0.0 {
+                    g[i][j] += f * g[k][j];
                 }
             }
         }
     }
-    -l[a][b]
+    g[a][b]
 }
 
 #[cfg(test)]

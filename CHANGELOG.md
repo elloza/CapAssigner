@@ -2,6 +2,17 @@
 
 La versión publicada se ve en el pie de la web (versión · commit · fecha de build).
 
+## 2.1.1 — 2026-09-23
+
+- **Corregido**: con valores muy dispares (p. ej. 10 nF junto a 55 F) la comprobación interna fallaba por cancelación numérica. La reducción de Kron, tanto en el motor como en el verificador independiente, usa ahora la forma GTH (sin restas), exacta hasta el redondeo con cualquier rango de valores.
+- **Corregido**: tras un error o una cancelación ya no se muestran debajo los resultados de la búsqueda anterior.
+- **Nuevo**: avisos previos sobre los datos:
+  - objetivo inalcanzable, con el mínimo y el máximo posibles;
+  - valores separados muchas décadas;
+  - piezas por debajo de las capacidades parásitas o supercondensadores (posible error de unidades);
+  - bloqueo con explicación de lo que el motor no admite.
+- Tests de regresión del caso reportado (Rust, oráculo TS y end-to-end).
+
 ## 2.1.0 — 2026-09-23
 
 Arreglos de la revisión formal ([docs/REVISION.md](docs/REVISION.md)) y de la auditoría externa.
