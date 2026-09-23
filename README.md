@@ -1,68 +1,98 @@
-# CapAssigner v2
+# CapAssigner
 
-**Synthesis of capacitor networks with a target equivalent capacitance — entirely in the browser.**
+[![CI](https://github.com/elloza/CapAssigner/actions/workflows/ci.yml/badge.svg)](https://github.com/elloza/CapAssigner/actions/workflows/ci.yml)
+[![Deploy](https://github.com/elloza/CapAssigner/actions/workflows/pages.yml/badge.svg)](https://github.com/elloza/CapAssigner/actions/workflows/pages.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Given some capacitors and a target C\*, CapAssigner finds the two-terminal networks (series, parallel, Wheatstone bridges and every other topology) whose equivalent capacitance is closest to C\*, proves when the answer is optimal, and verifies every circuit independently with exact arithmetic.
+**Síntesis de redes de condensadores con una capacidad equivalente objetivo, en el navegador.**
 
-- **Live app:** https://elloza.github.io/CapAssigner/
-- Engine in **Rust → WebAssembly**, run in a Web Worker. No server; the page works offline once loaded.
-- UI in Spanish and English.
+👉 **[Abrir la aplicación](https://elloza.github.io/CapAssigner/)**
 
-## What it solves
+Dados unos condensadores y un valor objetivo C\*, CapAssigner encuentra las redes entre dos terminales (serie, paralelo, puentes de Wheatstone y cualquier otra topología) cuya capacidad equivalente más se acerca a C\*. Indica cuándo la respuesta es óptima y verifica cada circuito con aritmética exacta. Todo se calcula en tu navegador con un motor en Rust compilado a WebAssembly: no hay servidor ni se envían datos.
 
-| Mode | Meaning |
+![CapAssigner resolviendo el puente 1–5 pF → 170/71 pF](docs/screenshot.png)
+
+## Qué hace
+
+- **Dos problemas**
+  - *Usar todos*: cada condensador de la lista se usa exactamente una vez, como en el ejercicio clásico de clase. Hasta 12 piezas.
+  - *Inventario*: elige entre 1 y 6 piezas de una serie E3–E96 (cantidad ilimitada) o de tu cajón con existencias (`10pF×2 4.7pF×3`).
+- **Todas las topologías**: serie-paralelo, puentes y cualquier red de dos terminales hasta 9 piezas.
+- **Garantía en cada resultado**: la búsqueda es *exhaustiva* (no existe una red mejor) o lleva una *cota demostrada* de lo que el óptimo podría mejorar.
+- **Verificación independiente**: análisis nodal, balance de energía, conservación de la carga y valor exacto en fracciones a partir del texto que escribes (`4.7pF` = 47/10 pF; también admite `170/71pF`).
+- **Análisis de cada red**: esquema, fórmula, tensión, carga y energía por pieza (la sensibilidad ∂C_eq/∂C_i = Δv²), e intervalo de C_eq con la tolerancia de las piezas.
+- **Exportación** a SPICE, CircuiTikZ (LaTeX), SVG y JSON. Cada problema tiene su enlace para compartirlo.
+- **Estimación del tiempo** antes de buscar, y progreso con tiempo restante durante la búsqueda, que se puede cancelar.
+- Interfaz en español e inglés, con tema claro y oscuro, y adaptada al móvil.
+
+## Formatos de entrada
+
+| Escribes | Significa |
 |---|---|
-| **Use all** | Every listed capacitor is used exactly once (the classic classroom exercise). Up to 12 parts. |
-| **Inventory** | Choose 1…K parts (K ≤ 10) from an E-series (E3–E96, unlimited) or from a drawer with limited stock (`10pF×2 4.7pF×3`). |
+| `4.7pF`, `4,7 pF`, `4p7` | 4,7 pF |
+| `10n`, `10nF`, `2.2uF`, `2.2µF`, `1mF`, `15fF` | prefijos f, p, n, µ/u, m |
+| `1e-11`, `1.2*10^-12` | faradios, en notación científica |
+| `170/71pF` | fracción exacta |
+| `5.2` | en la unidad por defecto elegida (pF salvo que la cambies) |
 
-| Topologies | Guarantee |
-|---|---|
-| Series-parallel | Exhaustive. With ≥ 9 distinct parts it switches to a log-grid pruning with a **proven bound** on the distance to the optimum, which is shown in the UI. |
-| + Bridges / All networks | Every two-terminal network up to 9 parts, via SPQR decomposition with a catalog of 3-connected cores (K₄ bridge, W₄, K₅−e, K₅, prism, K₃,₃, …). Exhaustive up to 8 distinct parts (more with repeated values); beyond that the same certified bound applies. |
+## Cómo funciona (resumen)
 
-Each result shows the schematic, formula, exact value (from the decimal text typed, e.g. `4.7pF` = 47/10 pF, or `170/71pF`), per-part voltage/charge/energy (sensitivity ∂C_eq/∂C_i = Δv²), the tolerance interval, and exports to **SPICE**, **CircuiTikZ**, **SVG** and **JSON**. Problems are shareable as links.
+1. **Programación dinámica de valores.** Las piezas iguales se agrupan en clases. Para cada multiconjunto de piezas se guarda el conjunto de capacidades *distintas* alcanzables, con una red testigo por valor. Así no se repiten árboles equivalentes.
+2. **Encuentro en el medio.** El estado completo no se construye: para cada partición se despeja el complemento exacto (`C* − a` en paralelo, `aC*/(a − C*)` en serie) y se busca por bisección.
+3. **Redes no serie-paralelo.** Por la descomposición SPQR, toda red de dos terminales se forma con nodos serie, paralelo y *rígidos* (grafos 3-conexos). El motor genera todos los grafos 3-conexos de hasta 10 aristas y rellena sus aristas con subredes. Así cubre todas las redes de hasta 9 piezas.
+4. **Poda con garantía.** Si la memoria no basta, cada conjunto se agrupa en una rejilla logarítmica. Como serie, paralelo y cualquier núcleo son monótonos y 1-homogéneos, la pérdida está acotada por e^{(n−1)ε} − 1, y esa cota se muestra.
 
-## How it works (short)
+La pestaña **Teoría y métodos** de la aplicación lo explica en detalle, con las ecuaciones, el catálogo de núcleos, las garantías, la validación y las líneas futuras. Hay notas técnicas adicionales en [docs/approaches.md](docs/approaches.md).
 
-1. **Value dynamic programming** over multisets of parts: for every state, keep the sorted set of *distinct* reachable C values with one witness each (no duplicate trees, unlike v1).
-2. **Meet in the middle** at the root: solve for the exact partner (`T − a` in parallel, `aT/(a − T)` in series) and binary-search it.
-3. **Non-series-parallel networks**: R-nodes of the SPQR tree are 3-connected graphs, generated by brute force with canonical labelling. Their edges are filled with sub-networks from the DP and evaluated by Kron reduction.
-4. **Pruning with a certificate**: series, parallel and every core are monotone and 1-homogeneous, hence non-expansive in log space. Snapping each state to a log grid of width ε therefore bounds the loss by e^{(n−1)ε} − 1.
+## Validación
 
-See the in-app *Theory & methods* page and [docs/approaches.md](docs/approaches.md) for details, alternatives (MILP, ALNS, learning) and references.
+- **Secuencias OEIS, con aritmética racional exacta**: el número de valores distintos con n piezas iguales coincide con A048211 (serie-paralelo, n ≤ 12), A174283 (+ puentes, n ≤ 9), **A337517 (todas las redes, n ≤ 9)** y A006351 (redes SP con piezas distintas, n ≤ 7).
+- **Propiedades físicas** probadas sobre redes aleatorias (proptest y fast-check): cotas, homogeneidad, invariancia al reetiquetar, monotonía de Rayleigh, dualidad serie↔paralelo, reciprocidad, transformación Y–Δ, puente equilibrado y fórmula cerrada del puente, energía, Kirchhoff y sensibilidad.
+- **Oráculo independiente**: cada resultado del motor se recalcula en TypeScript, en coma flotante y con fracciones exactas.
+- **Casos de referencia**: ejercicios de clase y el puente {1,2,3,4,5} pF → 170/71 pF, cuyo mejor valor serie-paralelo es 43/18 pF (0,229 % de diferencia).
+- **Pruebas de extremo a extremo** con Playwright sobre la web compilada, incluido un presupuesto de rendimiento.
 
-## Validation
+## Rendimiento orientativo
 
-- **OEIS ground truth** (exact rationals): distinct values from n equal capacitors match A048211 (SP, n ≤ 12), A174283 (SP + bridges, n ≤ 9), **A337517 (all networks, n ≤ 9)** and A006351 (labelled SP networks, n ≤ 7).
-- **Physics properties** (proptest + fast-check): bounds, homogeneity, permutation invariance, Rayleigh monotonicity, series↔parallel duality, reciprocity, Y–Δ, balanced/unbalanced bridge, energy balance, Kirchhoff, sensitivity.
-- **Independent oracle**: every WASM result is re-derived in TypeScript by nodal analysis, both in floating point and with BigInt fractions.
-- **v1 golden fixtures**: `legacy/scripts/export_golden.py` runs v1 on its exercises. v2 must match or beat it, and it does, e.g. five equal parts → C needs a bridge that v1 could not find.
-- **Bridge-5 case**: {1,2,3,4,5} pF → 170/71 pF exactly; the best SP network is 43/18 pF (0.229 % away).
-- **E2E** (Playwright) on the built static site, including a performance budget.
+Modo «usar todos» con valores distintos, en un portátil y en el navegador. Con valores repetidos es mucho más rápido.
 
-## Development
+| Piezas | Serie-paralelo | Todas las redes | Resultado |
+|---|---|---|---|
+| ≤ 7 | < 0,1 s | < 0,2 s | exhaustivo |
+| 8 | ≈ 0,4 s | ≈ 1,5 s | exhaustivo |
+| 9 | ≈ 6 s | ≈ 16 s | cota ≤ 0,05 % |
+| 12 | ≈ 50 s | — | cota ≤ 5 % (error real ~1e-9) |
 
-Requirements: Rust (stable, `wasm32-unknown-unknown` target), [wasm-pack](https://github.com/wasm-bindgen/wasm-pack), Node 22.
+## Desarrollo
+
+Requisitos: Rust estable con el target `wasm32-unknown-unknown`, [wasm-pack](https://github.com/wasm-bindgen/wasm-pack) y Node 22.
 
 ```bash
 npm ci
-npm run dev          # builds the WASM engine and starts Vite
-npm test             # Vitest: units, physics oracle, WASM cross-checks
-npm run e2e          # Playwright against `vite preview` (run `npm run build` first)
-cargo test --workspace --release
+npm run dev                      # compila el motor WASM y arranca Vite
+npm test                         # Vitest: unidades, oráculo físico, WASM
+npm run build && npm run e2e     # Playwright sobre la web compilada
+cargo test --workspace --release # motor: unidades, OEIS, propiedades, API
 ```
 
-Layout:
-
 ```
-crates/capcore/   Rust engine (DP, cores, Kron reduction, rationals, JSON API, wasm-bindgen)
-src/              Svelte 5 + TypeScript app (worker, oracle, renderer, exports, i18n)
-tests/            Vitest unit/property tests, Playwright e2e, golden fixtures
-legacy/           v1 (Python/Streamlit), kept as a reference and fixture generator
+crates/capcore/   motor en Rust: DP de valores, núcleos 3-conexos, reducción de Kron, racionales, API JSON, wasm-bindgen
+src/              aplicación Svelte 5 + TypeScript: worker, oráculo físico, esquemas, exportación, i18n
+tests/            pruebas Vitest y Playwright, casos de referencia
+docs/             notas técnicas y captura
+legacy/           versión anterior en Python, usada para generar casos de referencia
 ```
 
-Deployment: `.github/workflows/pages.yml` builds and publishes `dist/` to GitHub Pages on every push to `main`.
+Cada push a `main` compila y publica la web en GitHub Pages (`.github/workflows/pages.yml`). La integración continua ejecuta rustfmt, clippy, todas las pruebas y el e2e (`.github/workflows/ci.yml`).
 
-## License
+## Líneas futuras
 
-MIT
+Restricciones de diseño (coste, tensión nominal) con MILP; búsqueda a gran escala (ALNS) con reparación exacta para más de 12 piezas; optimización robusta con tolerancias distintas por pieza; frente de Pareto error/piezas/coste; construcción multihilo; resistencias e inductancias; un benchmark abierto.
+
+---
+
+**English.** CapAssigner finds capacitor networks (series, parallel, bridges, any topology up to 9 parts) whose equivalent capacitance best matches a target. Each result is either exhaustive or comes with a proven bound, and every circuit is verified with exact arithmetic. It runs entirely in the browser (Rust → WebAssembly). [Open the app](https://elloza.github.io/CapAssigner/); the UI is available in English.
+
+## Licencia
+
+[MIT](LICENSE)

@@ -173,7 +173,7 @@ pub struct Engine<'c, T: Num, S: Space> {
     cores: Vec<&'c Core>,
     pub p: Params,
     pub stats: Stats,
-    progress: Option<Box<dyn FnMut(usize, usize) + 'c>>,
+    progress: Option<Box<dyn FnMut(f64) + 'c>>,
     /// Some state skipped its cores because of `max_core_work`.
     cores_skipped: std::cell::Cell<bool>,
 }
@@ -354,7 +354,10 @@ impl<'c, T: Num, S: Space> Engine<'c, T, S> {
         }
     }
 
-    pub fn on_progress(&mut self, f: impl FnMut(usize, usize) + 'c) {
+    /// `f(fraction)` is called after each state, with the fraction of the
+    /// estimated work done (a state of size k is weighted 5^k, which tracks how
+    /// its candidate count grows).
+    pub fn on_progress(&mut self, f: impl FnMut(f64) + 'c) {
         self.progress = Some(Box::new(f));
     }
 
@@ -372,11 +375,19 @@ impl<'c, T: Num, S: Space> Engine<'c, T, S> {
         let mut order: Vec<usize> = (0..n).filter(|&s| !root(s)).collect();
         order.sort_by_key(|&s| self.space.size(s));
         let total = order.len();
-        for (done, s) in order.into_iter().enumerate() {
+        let weight = |s: usize| 5f64.powi(self.space.size(s) as i32);
+        let weights: Vec<f64> = order.iter().map(|&s| weight(s)).collect();
+        // The root queries run after this loop; count them so progress does
+        // not reach 100 % before they start.
+        let root_weight: f64 = (0..n).filter(|&s| root(s)).map(weight).sum();
+        let total_weight: f64 = weights.iter().sum::<f64>() + root_weight;
+        let mut done_weight = 0.0;
+        for (done, (s, w)) in order.into_iter().zip(weights).enumerate() {
             let cap = self.state_cap(total - done);
             self.build(s, cap)?;
+            done_weight += w;
             if let Some(cb) = self.progress.as_mut() {
-                cb(done + 1, total);
+                cb(done_weight / total_weight);
             }
         }
         Ok(())

@@ -25,7 +25,7 @@ export class SolverClient {
     this.spawn();
   }
 
-  run(req: SolveRequest, onProgress?: (done: number, total: number) => void): Promise<SolveResult> {
+  run(req: SolveRequest, onProgress?: (fraction: number) => void): Promise<SolveResult> {
     this.cancel();
     const worker = this.spawn();
     const id = ++this.seq;
@@ -34,7 +34,7 @@ export class SolverClient {
       worker.onmessage = (ev: MessageEvent<WorkerOut>) => {
         const m = ev.data;
         if (m.id !== id) return;
-        if (m.type === 'progress') onProgress?.(m.done, m.total);
+        if (m.type === 'progress') onProgress?.(m.fraction);
         else {
           this.pending = null;
           if (m.type === 'done') resolve({ res: m.res, ms: m.ms });

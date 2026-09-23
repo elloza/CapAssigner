@@ -13,18 +13,14 @@ pub mod space;
 use wasm_bindgen::prelude::*;
 
 /// Solve a JSON request (see [`api::Request`]) and return a JSON response.
-/// `progress(done, total)` is invoked while the value sets are built.
+/// `progress(fraction)` reports the share of the estimated work done (0–1).
 #[wasm_bindgen(js_name = solve)]
 pub fn solve_json(request: &str, progress: Option<js_sys::Function>) -> Result<String, JsValue> {
     let req: api::Request = serde_json::from_str(request)
         .map_err(|e| JsValue::from_str(&format!("bad request: {e}")))?;
-    let mut report = |done: usize, total: usize| {
+    let mut report = |fraction: f64| {
         if let Some(f) = &progress {
-            let _ = f.call2(
-                &JsValue::NULL,
-                &JsValue::from_f64(done as f64),
-                &JsValue::from_f64(total as f64),
-            );
+            let _ = f.call1(&JsValue::NULL, &JsValue::from_f64(fraction));
         }
     };
     let res = api::solve(&req, &mut report).map_err(|e| JsValue::from_str(&e))?;

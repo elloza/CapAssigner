@@ -2,7 +2,7 @@
   import { i18n, t } from '../lib/i18n.svelte';
   import { formatCapacitance, formatPercent } from '../lib/units';
   import { coreLabel, formula } from '../lib/export';
-  import type { Built, FormState } from '../lib/form';
+  import { EXAMPLES, type Built, type FormState } from '../lib/form';
   import type { SolveResponse } from '../lib/types';
   import SolutionDetail from './SolutionDetail.svelte';
 
@@ -10,8 +10,16 @@
     result: { res: SolveResponse; ms: number; built: Built; form: FormState } | null;
     error: string | null;
     running: boolean;
+    /** Share of the estimated work done (0–1). */
+    progress: number;
+    /** Seconds since the search started. */
+    elapsed: number;
+    /** Estimated total seconds before starting. */
+    expected: number;
+    oncancel: () => void;
+    onexample: (id: string) => void;
   }
-  let { result, error, running }: Props = $props();
+  let { result, error, running, progress, elapsed, expected, oncancel, onexample }: Props = $props();
 
   let selected = $state(0);
   $effect(() => {
@@ -21,26 +29,69 @@
   });
 
   const coreMap = $derived(new Map((result?.res.cores ?? []).map((c) => [c.id, c])));
+
+  /**
+   * Remaining time: the prior estimate early on, then more and more an
+   * extrapolation from the measured progress.
+   */
+  const remaining = $derived.by(() => {
+    const prior = Math.max(expected - elapsed, 0);
+    if (progress < 0.05 || elapsed < 0.3) return prior;
+    const measured = (elapsed * (1 - progress)) / progress;
+    // Progress front-loads (late states cost more than their weight), so
+    // trust it only gradually.
+    const w = progress * progress;
+    return w * measured + (1 - w) * prior;
+  });
 </script>
 
 <section class="results" aria-live="polite">
+  {#if running}
+    <div class="running" role="status">
+      <div class="head">
+        <span class="spinner" aria-hidden="true"></span>
+        <strong>{t().computing}</strong>
+        <button type="button" onclick={oncancel}>{t().cancel}</button>
+      </div>
+      <progress max="1" value={progress} aria-label={t().progress}></progress>
+      <div class="times mono">
+        <span>{t().elapsed}: {t().duration(elapsed)}</span>
+        <span>{t().remaining}: {remaining < 1 ? '< 1 s' : `≈ ${t().duration(remaining)}`}</span>
+      </div>
+      <p class="muted small">{t().runningHint}</p>
+    </div>
+  {/if}
+
   {#if error}
     <p class="note bad">{error}</p>
   {/if}
-  {#if !result}
-    <div class="empty muted">{running ? t().computing : t().noResults}</div>
-  {:else}
+
+  {#if !result && !running}
+    <div class="empty">
+      <svg viewBox="0 0 120 40" width="120" height="40" aria-hidden="true">
+        <path d="M4 20h44M72 20h44M48 6v28M72 6v28" stroke="var(--accent)" stroke-width="4" fill="none" stroke-linecap="round" />
+      </svg>
+      <h2>{t().emptyTitle}</h2>
+      <ol>
+        {#each t().emptySteps as step, i (i)}<li>{step}</li>{/each}
+      </ol>
+      <p class="muted">{t().tryExample}</p>
+      <div class="ex">
+        {#each EXAMPLES as ex (ex.id)}
+          <button type="button" onclick={() => onexample(ex.id)}>{ex[i18n.lang]}</button>
+        {/each}
+      </div>
+    </div>
+  {:else if result}
     {@const { res, ms, built, form } = result}
     {@const st = res.stats}
-    <div class="summary" class:ok={st.exhaustive} class:warn={!st.exhaustive}>
+    <div class="summary" class:ok={st.exhaustive} class:warn={!st.exhaustive} class:stale={running}>
       <strong>{st.exhaustive ? t().exhaustive : t().approximate}</strong>
-      <span>
-        {#if st.exhaustive}{t().exhaustiveHint}{:else}{t().approximateHint} {formatPercent(st.boundRel)}.{/if}
-      </span>
+      <span>{st.exhaustive ? t().exhaustiveHint : t().approximateHint(formatPercent(st.boundRel).replace('+', ''))}</span>
       <span class="muted stats">{t().stats(st.states, st.entries, ms)}</span>
     </div>
 
-    <div class="table-wrap">
+    <div class="table-wrap" class:stale={running}>
       <table>
         <thead>
           <tr>
@@ -48,7 +99,7 @@
             <th>{t().colCeq}</th>
             <th>{t().colError}</th>
             <th>{t().colParts}</th>
-            <th class="net">{t().colNetwork}</th>
+            <th class="net">{t().colNetwork} <span class="legend">({t().legend})</span></th>
           </tr>
         </thead>
         <tbody>
@@ -93,11 +144,86 @@
     gap: 1rem;
     min-width: 0;
   }
+  .running {
+    background: var(--panel);
+    border: 1px solid var(--accent);
+    border-radius: var(--radius);
+    padding: 0.9rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .head {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .head button {
+    margin-left: auto;
+  }
+  .spinner {
+    width: 1rem;
+    height: 1rem;
+    border-radius: 50%;
+    border: 2px solid var(--accent-soft);
+    border-top-color: var(--accent);
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spinner {
+      animation: none;
+    }
+  }
+  progress {
+    width: 100%;
+    height: 0.6rem;
+    accent-color: var(--accent);
+  }
+  .times {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+  }
+  .small {
+    font-size: 0.82rem;
+    margin: 0;
+  }
+  .stale {
+    opacity: 0.45;
+  }
   .empty {
     border: 1px dashed var(--line);
     border-radius: var(--radius);
-    padding: 3rem 1rem;
-    text-align: center;
+    padding: 2rem clamp(1rem, 4vw, 2.5rem);
+    background: var(--panel);
+  }
+  .empty h2 {
+    margin: 0.6rem 0 0.8rem;
+    font-size: 1.25rem;
+  }
+  .empty ol {
+    margin: 0 0 1rem;
+    padding-left: 1.2rem;
+    line-height: 1.7;
+  }
+  .ex {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+  .ex button {
+    font-size: 0.85rem;
+    border-radius: 999px;
+    padding: 0.3rem 0.8rem;
+  }
+  .ex button:hover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
   }
   .note {
     margin: 0;
@@ -158,6 +284,11 @@
     color: var(--muted);
     border-bottom: 1px solid var(--line);
     padding: 0.5rem 0.6rem;
+  }
+  .legend {
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 400;
   }
   td {
     padding: 0.4rem 0.6rem;

@@ -161,7 +161,8 @@ export function formatCapacitance(farads: number, digits = 4): string {
 
 export function formatPercent(rel: number, digits = 3): string {
   const pct = rel * 100;
-  if (pct === 0) return '0 %';
+  // Differences below 1e-12 are float round-off of an exact match.
+  if (Math.abs(rel) < 1e-12) return '0 %';
   const a = Math.abs(pct);
   const s = a >= 0.01 ? pct.toFixed(digits) : pct.toExponential(2);
   return `${pct > 0 ? '+' : ''}${s} %`;

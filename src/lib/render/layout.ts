@@ -44,7 +44,8 @@ interface Block {
   draw(x: number, y: number, out: Prim[]): void;
 }
 
-function vertexPositions(core: Core): Pt[] {
+/** Vertex positions in the unit square, A (0) on the left and B (1) on the right. */
+export function vertexPositions(core: Core): Pt[] {
   // x: the electrical potential of each vertex with unit edges (A = 0, B = 1),
   // so charge visibly flows left to right. y: a repulsion layout with x fixed,
   // started alternately above and below the A–B axis.
@@ -67,9 +68,9 @@ function vertexPositions(core: Core): Pt[] {
         const dx = x[i]! - x[j]!;
         const dy = y[i]! - y[j]!;
         const d2 = dx * dx + dy * dy + 1e-4;
-        f += (dy / d2) * 0.01;
+        f += (dy / d2) * 0.03;
       }
-      for (const j of adj[i]!) f -= (y[i]! - y[j]!) * 0.02;
+      for (const j of adj[i]!) f -= (y[i]! - y[j]!) * 0.01;
       y[i] = Math.min(1, Math.max(0, y[i]! + f));
     }
   }

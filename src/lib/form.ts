@@ -48,7 +48,10 @@ export const DEFAULT_FORM: FormState = {
 /** Largest "use all" problem for which non-series-parallel cores are explored. */
 export const MAX_CORE_PARTS = 9;
 export const MAX_ALL_PARTS = 12;
-export const MAX_INVENTORY_PARTS = 10;
+/** Beyond 6 parts an E-series already hits targets exactly and time grows fast. */
+export const MAX_INVENTORY_PARTS = 6;
+/** Stored-value budget for inventory searches (smaller sets, much faster). */
+const INVENTORY_BUDGET = 1_000_000;
 
 export const EXAMPLES: { id: string; es: string; en: string; form: Partial<FormState> }[] = [
   {
@@ -190,6 +193,7 @@ export function buildRequest(f: FormState): Built {
           maxParts: f.maxParts,
           minParts: Math.min(f.minParts, f.maxParts),
           stock: limited ? stock.map((c) => c ?? f.maxParts) : null,
+          maxEntries: INVENTORY_BUDGET,
         }
       : {}),
   };

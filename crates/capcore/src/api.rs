@@ -375,8 +375,8 @@ fn run<S: Space>(
     })
 }
 
-/// Solve a request. `progress(done, total)` is called as states are built.
-pub fn solve(req: &Request, progress: &mut dyn FnMut(usize, usize)) -> Result<Response, String> {
+/// Solve a request. `progress(fraction)` reports the share of the estimated work done.
+pub fn solve(req: &Request, progress: &mut dyn FnMut(f64)) -> Result<Response, String> {
     validate(req)?;
     let target = req.target;
     let params = Params {

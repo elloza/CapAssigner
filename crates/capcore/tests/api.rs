@@ -19,7 +19,7 @@ fn req(mode: Mode, values: &[f64], target: f64) -> Request {
 }
 
 fn run(r: &Request) -> Response {
-    solve(r, &mut |_, _| {}).expect("solve")
+    solve(r, &mut |_| {}).expect("solve")
 }
 
 fn count_leaves(t: &Tree) -> usize {
@@ -174,7 +174,7 @@ fn invalid_requests_are_rejected() {
         },
     ];
     for r in &bad {
-        assert!(solve(r, &mut |_, _| {}).is_err(), "{r:?}");
+        assert!(solve(r, &mut |_| {}).is_err(), "{r:?}");
     }
 }
 
@@ -218,6 +218,54 @@ fn timing_survey() {
                 res.stats.entries,
                 res.stats.candidates
             );
+        }
+    }
+}
+
+/// Inventory timing survey: `cargo test --release --test api inventory_timing -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn inventory_timing_survey() {
+    let e24 = [
+        1.0, 1.1, 1.2, 1.3, 1.5, 1.6, 1.8, 2.0, 2.2, 2.4, 2.7, 3.0, 3.3, 3.6, 3.9, 4.3, 4.7, 5.1,
+        5.6, 6.2, 6.8, 7.5, 8.2, 9.1,
+    ];
+    let var = |k: &str, d: usize| {
+        std::env::var(k)
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(d)
+    };
+    let budget = var("TIMING_BUDGET", 6_000_000);
+    let kmax = var("TIMING_K", 8);
+    for (name, step) in [("E6", 4), ("E12", 2), ("E24", 1)] {
+        for decades in [2, 4] {
+            let vals: Vec<f64> = (0..decades)
+                .flat_map(|d| {
+                    e24.iter()
+                        .step_by(step)
+                        .map(move |m| m * 10f64.powi(d) * 1e-12)
+                })
+                .collect();
+            for k in [3, 4, 5, 6, 8].into_iter().filter(|&k| k <= kmax) {
+                for cores in [0, 9] {
+                    let r = Request {
+                        max_parts: k,
+                        max_core_edges: cores,
+                        max_entries: budget,
+                        ..req(Mode::Inventory, &vals, 3.1416e-11)
+                    };
+                    let t = std::time::Instant::now();
+                    let res = run(&r);
+                    eprintln!(
+                        "{name} m={:3} K={k} cores={cores} {:>7.2}s exh={} best={:.1e}",
+                        vals.len(),
+                        t.elapsed().as_secs_f64(),
+                        res.stats.exhaustive,
+                        res.solutions[0].rel_error.abs()
+                    );
+                }
+            }
         }
     }
 }

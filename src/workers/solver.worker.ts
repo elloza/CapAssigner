@@ -6,7 +6,7 @@ import type { SolveRequest, SolveResponse } from '../lib/types';
 
 export type WorkerIn = { id: number; req: SolveRequest };
 export type WorkerOut =
-  | { id: number; type: 'progress'; done: number; total: number }
+  | { id: number; type: 'progress'; fraction: number }
   | { id: number; type: 'done'; res: SolveResponse; ms: number }
   | { id: number; type: 'error'; message: string };
 
@@ -19,11 +19,11 @@ self.onmessage = async (ev: MessageEvent<WorkerIn>) => {
     await ready;
     const t0 = performance.now();
     let last = 0;
-    const out = solve(JSON.stringify(req), (done: number, total: number) => {
+    const out = solve(JSON.stringify(req), (fraction: number) => {
       const now = performance.now();
-      if (now - last > 60 || done === total) {
+      if (now - last > 60 || fraction >= 1) {
         last = now;
-        post({ id, type: 'progress', done, total });
+        post({ id, type: 'progress', fraction });
       }
     });
     post({ id, type: 'done', res: JSON.parse(out) as SolveResponse, ms: performance.now() - t0 });

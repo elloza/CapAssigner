@@ -5,7 +5,8 @@
   import Theory from './components/Theory.svelte';
   import About from './components/About.svelte';
   import { i18n, setLang, t } from './lib/i18n.svelte';
-  import { buildRequest, fromHash, toHash, type Built, type FormState } from './lib/form';
+  import { buildRequest, DEFAULT_FORM, EXAMPLES, fromHash, toHash, type Built, type FormState } from './lib/form';
+  import { estimate } from './lib/estimate';
   import { CancelledError, SolverClient } from './lib/solver';
   import type { SolveResponse } from './lib/types';
 
@@ -17,6 +18,8 @@
   let tab: Tab = $state('solve');
   let running = $state(false);
   let progress = $state(0);
+  let elapsed = $state(0);
+  let expected = $state(0);
   let error: string | null = $state(null);
   let result: { res: SolveResponse; ms: number; built: Built; form: FormState } | null = $state(null);
   let theme: 'auto' | 'light' | 'dark' = $state('auto');
@@ -64,15 +67,27 @@
     if (!b.req) return;
     running = true;
     progress = 0;
+    elapsed = 0;
+    expected = estimate(b.req).seconds;
     error = null;
+    const t0 = performance.now();
+    const tick = setInterval(() => (elapsed = (performance.now() - t0) / 1000), 200);
     try {
-      const { res, ms } = await client.run(b.req, (d, total) => (progress = total ? d / total : 0));
+      const { res, ms } = await client.run(b.req, (f) => (progress = f));
       result = { res, ms, built: b, form: { ...form } };
     } catch (e) {
       error = e instanceof CancelledError ? t().cancelled : e instanceof Error ? e.message : String(e);
     } finally {
+      clearInterval(tick);
       running = false;
     }
+  }
+
+  function loadExample(id: string) {
+    const ex = EXAMPLES.find((e) => e.id === id);
+    if (!ex) return;
+    form = { ...DEFAULT_FORM, ...ex.form };
+    queueMicrotask(solve);
   }
 
   function cancel() {
@@ -117,8 +132,8 @@
 <main>
   {#if tab === 'solve'}
     <div class="solve">
-      <SolverForm bind:form {built} {running} {progress} onsolve={solve} oncancel={cancel} />
-      <Results {result} {error} {running} />
+      <SolverForm bind:form {built} {running} onsolve={solve} onexample={loadExample} />
+      <Results {result} {error} {running} {progress} {elapsed} {expected} oncancel={cancel} onexample={loadExample} />
     </div>
   {:else if tab === 'theory'}
     <Theory />

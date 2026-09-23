@@ -1,6 +1,7 @@
 <script lang="ts">
   import { i18n, t } from '../lib/i18n.svelte';
-  import { DEFAULT_FORM, EXAMPLES, MAX_ALL_PARTS, MAX_INVENTORY_PARTS, type Built, type FormState } from '../lib/form';
+  import { EXAMPLES, MAX_ALL_PARTS, MAX_INVENTORY_PARTS, type Built, type FormState } from '../lib/form';
+  import { estimate } from '../lib/estimate';
   import { formatCapacitance, parseList, UNITS, type ParseError } from '../lib/units';
   import type { Series } from '../lib/eseries';
 
@@ -8,24 +9,19 @@
     form: FormState;
     built: Built;
     running: boolean;
-    progress: number;
     onsolve: () => void;
-    oncancel: () => void;
+    onexample: (id: string) => void;
   }
-  let { form = $bindable(), built, running, progress, onsolve, oncancel }: Props = $props();
+  let { form = $bindable(), built, running, onsolve, onexample }: Props = $props();
 
   const series: Series[] = ['E3', 'E6', 'E12', 'E24', 'E48', 'E96'];
   const decades = Array.from({ length: 16 }, (_, i) => i - 15);
 
   const chips = $derived(form.mode === 'all' ? parseList(form.caps, form.unit).values : []);
+  const est = $derived(built.req ? estimate(built.req) : null);
 
   function errText(e: ParseError): string {
     return e.code === 'empty' ? '∅' : e.input;
-  }
-
-  function loadExample(id: string) {
-    const ex = EXAMPLES.find((e) => e.id === id);
-    if (ex) form = { ...DEFAULT_FORM, ...ex.form };
   }
 
   function submit(e: SubmitEvent) {
@@ -37,7 +33,14 @@
 <form class="panel" onsubmit={submit} aria-label={t().tabSolve}>
   <label class="examples">
     <span>{t().examples}</span>
-    <select value="" onchange={(e) => loadExample((e.currentTarget as HTMLSelectElement).value)}>
+    <select
+      value=""
+      onchange={(e) => {
+        const sel = e.currentTarget as HTMLSelectElement;
+        onexample(sel.value);
+        sel.value = '';
+      }}
+    >
       <option value="" disabled>—</option>
       {#each EXAMPLES as ex (ex.id)}
         <option value={ex.id}>{ex[i18n.lang]}</option>
@@ -74,7 +77,7 @@
 
   {#if form.mode === 'all'}
     <label>
-      <span>{t().capacitors} <em class="muted">({chips.length}/{MAX_ALL_PARTS})</em></span>
+      <span>{t().capacitors} <em class="count" class:over={chips.length > MAX_ALL_PARTS}>{chips.length}/{MAX_ALL_PARTS}</em></span>
       <textarea rows="3" bind:value={form.caps} spellcheck="false"></textarea>
       <small class="muted">{t().capacitorsHint}</small>
     </label>
@@ -109,6 +112,7 @@
             </select>
           </label>
         </div>
+        <small class="muted">{t().valuesCount(built.names.length)}</small>
       {:else}
         <label>
           <textarea rows="3" bind:value={form.inventory} spellcheck="false"></textarea>
@@ -122,7 +126,7 @@
         <input type="number" min="1" max={form.maxParts} bind:value={form.minParts} />
       </label>
       <label>
-        <span>{t().maxParts}</span>
+        <span>{t().maxParts} (≤ {MAX_INVENTORY_PARTS})</span>
         <input type="number" min="1" max={MAX_INVENTORY_PARTS} bind:value={form.maxParts} />
       </label>
     </div>
@@ -160,14 +164,16 @@
     <p class="err" role="alert">max {form.mode === 'all' ? MAX_ALL_PARTS : MAX_INVENTORY_PARTS}</p>
   {/if}
 
-  <div class="actions">
-    {#if running}
-      <button type="button" onclick={oncancel}>{t().cancel}</button>
-      <progress max="1" value={progress} aria-label={t().progress}></progress>
-    {:else}
-      <button class="primary" type="submit" disabled={!built.req}>{t().solve}</button>
-    {/if}
-  </div>
+  {#if est}
+    <p class="estimate" class:slow={est.seconds > 15}>
+      <span>{t().estimate}:</span>
+      <b>{est.seconds < 0.5 ? t().instant : `≈ ${t().duration(est.seconds)}`}</b>
+      · {est.exhaustive ? t().estExhaustive : t().estBounded}
+      {#if est.seconds > 15}<br /><small>{t().longWarn}</small>{/if}
+    </p>
+  {/if}
+
+  <button class="primary" type="submit" disabled={!built.req || running}>{t().solve}</button>
 </form>
 
 <style>
@@ -195,7 +201,7 @@
   }
   label > span {
     font-weight: 600;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--muted);
@@ -207,10 +213,11 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    min-width: 0;
   }
   legend {
     font-weight: 600;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--muted);
@@ -224,6 +231,7 @@
     border-radius: 8px;
     padding: 0.55rem 0.7rem;
     cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
   }
   .mode label.on {
     border-color: var(--accent);
@@ -276,6 +284,15 @@
   .examples select {
     flex: 1;
   }
+  .count {
+    font-style: normal;
+    font-weight: 500;
+    text-transform: none;
+    margin-left: 0.3rem;
+  }
+  .count.over {
+    color: var(--bad);
+  }
   .chips {
     display: flex;
     flex-wrap: wrap;
@@ -302,17 +319,19 @@
     padding: 0.45rem 0.6rem;
     font-size: 0.88rem;
   }
-  .actions {
-    display: flex;
-    gap: 0.7rem;
-    align-items: center;
+  .estimate {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--muted);
   }
-  .actions .primary {
-    flex: 1;
-    padding: 0.6rem;
+  .estimate b {
+    color: var(--ink);
   }
-  progress {
-    flex: 1;
-    accent-color: var(--accent);
+  .estimate.slow b {
+    color: var(--warn);
+  }
+  button.primary {
+    padding: 0.65rem;
+    font-size: 1rem;
   }
 </style>
