@@ -1,6 +1,6 @@
 [package]
 name = "capcore"
-version = "2.0.0"
+version = "2.1.0"
 edition = "2021"
 description = "Capacitor network synthesis engine (series-parallel DP, Laplacian evaluation)."
 license = "MIT"

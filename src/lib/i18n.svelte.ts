@@ -120,6 +120,7 @@ const es = {
   language: 'Idioma',
   theme: 'Tema',
   offline: 'Todo se calcula en tu navegador (Rust → WebAssembly). No se envía ningún dato.',
+  changelog: 'Novedades',
   duration,
 };
 
@@ -235,6 +236,7 @@ const en: Strings = {
   language: 'Language',
   theme: 'Theme',
   offline: 'Everything runs in your browser (Rust → WebAssembly). No data leaves it.',
+  changelog: 'Changelog',
   duration,
 };
 

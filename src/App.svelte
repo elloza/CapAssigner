@@ -105,7 +105,7 @@
       ><path d="M2 16h11M19 16h11M13 6v20M19 6v20" stroke="var(--accent)" stroke-width="3" fill="none" stroke-linecap="round" /></svg
     >
     <div>
-      <h1>{t().appName} <span class="ver">v2</span></h1>
+      <h1>{t().appName} <span class="ver">v{__APP_VERSION__}</span></h1>
       <p class="muted">{t().tagline}</p>
     </div>
   </div>
@@ -148,7 +148,13 @@
 
 <footer class="muted">
   <span>{t().offline}</span>
-  <a href="https://github.com/elloza/CapAssigner">GitHub</a>
+  <span class="build">
+    v{__APP_VERSION__} ·
+    <a href={`https://github.com/elloza/CapAssigner/commit/${__APP_COMMIT__}`}>{__APP_COMMIT__}</a>
+    · {__APP_BUILD_DATE__} ·
+    <a href="https://github.com/elloza/CapAssigner/blob/main/CHANGELOG.md">{t().changelog}</a> ·
+    <a href="https://github.com/elloza/CapAssigner">GitHub</a>
+  </span>
 </footer>
 
 <style>
